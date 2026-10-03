@@ -5,6 +5,8 @@
 * ``fabrication-prep worker`` — the slice worker loop (the worker Deployment's command).
 * ``fabrication-prep worker-health`` — exit 0 while the worker's heartbeat file is fresh (exec probe).
 * ``fabrication-prep check-profiles`` — verify every shipped profile against its catalog digest.
+* ``fabrication-prep selftest-slice`` — slice a built-in cube with the shipped profiles (no database); the
+  image build runs it as the Linux proof of the CLI contract.
 * ``fabrication-prep dev-token`` — local only: an RS256 key pair, a JWKS file and a signed token, for use
   with JWKS_PATH (honoured only when FABRICATION_PREP_ENV is local or test). It never talks to Janua.
 """
@@ -121,6 +123,10 @@ def main(argv: list[str] | None = None) -> int:
     health = sub.add_parser("worker-health", help="exit 0 while the worker heartbeat is fresh")
     health.add_argument("--max-age", type=float, default=180.0)
     sub.add_parser("check-profiles", help="verify shipped profiles against the catalog digests")
+    st = sub.add_parser("selftest-slice", help="slice a built-in cube with the shipped profiles (no database)")
+    st.add_argument("--target", choices=["klipper_gcode", "bambu_3mf"], default="klipper_gcode")
+    st.add_argument("--workdir", default="")
+    st.add_argument("--bin", default="")
     tok = sub.add_parser("dev-token", help="local-only RS256 token + JWKS file")
     tok.add_argument("--dir", default=".dev-keys")
     tok.add_argument("--scope", action="append", default=[])
@@ -137,6 +143,13 @@ def main(argv: list[str] | None = None) -> int:
         return worker_health(args.max_age)
     if args.command == "check-profiles":
         return check_profiles()
+    if args.command == "selftest-slice":
+        from .selftest import main as selftest_main
+        from .settings import get_settings
+
+        s = get_settings()
+        workdir = args.workdir or f"{s.worker_workdir}/selftest-{args.target}"
+        return selftest_main(args.bin or s.orcaslicer_bin, args.target, workdir)
     print(dev_token(args.dir, args.scope, args.tenant, args.issuer, args.audience))
     return 0
 

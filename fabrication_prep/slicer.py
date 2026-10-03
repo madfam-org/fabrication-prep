@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import time
@@ -266,9 +267,15 @@ def run_slicer(
     should_abort: Callable[[], bool],
     runner: Runner = subprocess_runner,
 ) -> SliceOutput:
+    # The CLI runs with cwd=workdir, so every path it receives must be absolute.
+    workdir, model = workdir.resolve(), model.resolve()
+    binary = str(Path(binary).resolve()) if "/" in binary else (shutil.which(binary) or binary)
     (workdir / "out").mkdir(parents=True, exist_ok=True)
     (workdir / "datadir").mkdir(parents=True, exist_ok=True)
-    result = runner(build_command(binary, workdir, model, target), workdir, timeout, should_abort)
+    try:
+        result = runner(build_command(binary, workdir, model, target), workdir, timeout, should_abort)
+    except OSError as exc:
+        raise SlicerError("slicer_unavailable", f"OrcaSlicer CLI not runnable: {type(exc).__name__}", True) from None
     if result.aborted:
         raise SlicerError("lease_lost", "the job's lease was lost while slicing; another worker owns it", True)
     if result.timed_out:
