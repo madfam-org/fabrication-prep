@@ -1,0 +1,77 @@
+{
+  "orcaslicer": {
+    "version": "2.4.2",
+    "tag": "v2.4.2",
+    "commit": "8500fcdccaa10b5099ac20d252af3a7c560046f1",
+    "repository": "https://github.com/OrcaSlicer/OrcaSlicer",
+    "profiles_path": "resources/profiles",
+    "licence": "AGPL-3.0"
+  },
+  "authored_groups": {
+    "bed_type_klipper": {
+      "reason": "OrcaSlicer's CLI defaults curr_bed_type to 'Cool Plate' when no project file sets it (measured: M190 S35 with Generic PLA). Voron-class printers ship with a PEI spring-steel sheet; we pin the textured PEI plate so the filament's textured_plate_temp applies. The operator must match the sheet actually installed."
+    },
+    "bed_type_bambu": {
+      "reason": "Same CLI default as above. The value is OrcaSlicer's own default_bed_type for the 'Bambu Lab A1' machine model (resources/profiles/BBL/machine/Bambu Lab A1.json), which the CLI does not apply on its own."
+    },
+    "tpu_safe": {
+      "reason": "MADFAM authoring, not an OrcaSlicer value. The TPU 95A filament profiles cap volumetric flow at 3.2-3.6 mm3/s; at 0.2 mm layers and ~0.45 mm lines that is ~35-40 mm/s. Line speeds are set below that so the cap never silently rescales them, and accelerations are reduced for a soft filament in a direct-drive extruder. Not yet validated on a physical printer."
+    }
+  },
+  "profiles": [
+    {"id": "klipper-corexy-350-0.4", "version": 1, "kind": "printer", "target": "klipper_gcode",
+     "label": {"es": "Impresora Klipper CoreXY 350 mm (clase Voron 2.4), boquilla 0.4", "en": "Klipper CoreXY 350 mm printer (Voron 2.4 class), 0.4 nozzle"},
+     "base": {"vendor": "Voron", "name": "Voron 2.4 350 0.4 nozzle"},
+     "set": {"curr_bed_type": {"value": "Textured PEI Plate", "group": "bed_type_klipper"}}},
+    {"id": "bambu-a1-0.4", "version": 1, "kind": "printer", "target": "bambu_3mf",
+     "label": {"es": "Bambu Lab A1, boquilla 0.4", "en": "Bambu Lab A1, 0.4 nozzle"},
+     "base": {"vendor": "BBL", "name": "Bambu Lab A1 0.4 nozzle"},
+     "set": {"curr_bed_type": {"value": "Textured PEI Plate", "group": "bed_type_bambu"}}},
+
+    {"id": "pla-generic-klipper", "version": 1, "kind": "filament", "material_class": "pla", "printers": ["klipper-corexy-350-0.4"],
+     "label": {"es": "PLA genérico", "en": "Generic PLA"},
+     "base": {"vendor": "OrcaFilamentLibrary", "name": "Generic PLA @System"}},
+    {"id": "petg-generic-klipper", "version": 1, "kind": "filament", "material_class": "petg", "printers": ["klipper-corexy-350-0.4"],
+     "label": {"es": "PETG genérico", "en": "Generic PETG"},
+     "base": {"vendor": "OrcaFilamentLibrary", "name": "Generic PETG @System"}},
+    {"id": "tpu-95a-klipper", "version": 1, "kind": "filament", "material_class": "tpu-95a", "printers": ["klipper-corexy-350-0.4"],
+     "requires_process_tag": "tpu-safe",
+     "label": {"es": "TPU 95A (valores del perfil Bambu TPU 95A de OrcaSlicer)", "en": "TPU 95A (values from OrcaSlicer's Bambu TPU 95A profile)"},
+     "base": {"vendor": "OrcaFilamentLibrary", "name": "Bambu TPU 95A @System"}},
+    {"id": "pla-generic-bambu-a1", "version": 1, "kind": "filament", "material_class": "pla", "printers": ["bambu-a1-0.4"],
+     "label": {"es": "PLA genérico (A1)", "en": "Generic PLA (A1)"},
+     "base": {"vendor": "BBL", "name": "Generic PLA @BBL A1"}},
+    {"id": "petg-generic-bambu-a1", "version": 1, "kind": "filament", "material_class": "petg", "printers": ["bambu-a1-0.4"],
+     "label": {"es": "PETG genérico (A1)", "en": "Generic PETG (A1)"},
+     "base": {"vendor": "BBL", "name": "Generic PETG @BBL A1"}},
+    {"id": "tpu-95a-bambu-a1", "version": 1, "kind": "filament", "material_class": "tpu-95a", "printers": ["bambu-a1-0.4"],
+     "requires_process_tag": "tpu-safe",
+     "label": {"es": "TPU 95A (A1, valores del perfil Bambu TPU 95A de OrcaSlicer)", "en": "TPU 95A (A1, values from OrcaSlicer's Bambu TPU 95A profile)"},
+     "base": {"vendor": "BBL", "name": "Bambu TPU 95A @BBL A1"}},
+
+    {"id": "standard-0.20-klipper", "version": 1, "kind": "process", "tags": ["standard"], "printers": ["klipper-corexy-350-0.4"],
+     "label": {"es": "Estándar 0.20 mm", "en": "Standard 0.20 mm"},
+     "base": {"vendor": "Voron", "name": "0.20mm Standard @Voron"}},
+    {"id": "standard-0.20-bambu-a1", "version": 1, "kind": "process", "tags": ["standard"], "printers": ["bambu-a1-0.4"],
+     "label": {"es": "Estándar 0.20 mm (A1)", "en": "Standard 0.20 mm (A1)"},
+     "base": {"vendor": "BBL", "name": "0.20mm Standard @BBL A1"}},
+    {"id": "tpu-safe-0.20-klipper", "version": 1, "kind": "process", "tags": ["tpu-safe"], "printers": ["klipper-corexy-350-0.4"],
+     "label": {"es": "Seguro para TPU 0.20 mm", "en": "TPU-safe 0.20 mm"},
+     "base": {"vendor": "Voron", "name": "0.20mm Standard @Voron"},
+     "set_group": "tpu_safe",
+     "set": {"outer_wall_speed": 25, "inner_wall_speed": 30, "sparse_infill_speed": 30, "internal_solid_infill_speed": 30,
+             "top_surface_speed": 25, "gap_infill_speed": 25, "initial_layer_speed": 15, "initial_layer_infill_speed": 20,
+             "bridge_speed": 20, "support_speed": 30, "support_interface_speed": 20,
+             "default_acceleration": 2000, "outer_wall_acceleration": 1000, "inner_wall_acceleration": 2000,
+             "top_surface_acceleration": 1000, "travel_acceleration": 3000}},
+    {"id": "tpu-safe-0.20-bambu-a1", "version": 1, "kind": "process", "tags": ["tpu-safe"], "printers": ["bambu-a1-0.4"],
+     "label": {"es": "Seguro para TPU 0.20 mm (A1)", "en": "TPU-safe 0.20 mm (A1)"},
+     "base": {"vendor": "BBL", "name": "0.20mm Standard @BBL A1"},
+     "set_group": "tpu_safe",
+     "set": {"outer_wall_speed": 25, "inner_wall_speed": 30, "sparse_infill_speed": 30, "internal_solid_infill_speed": 30,
+             "top_surface_speed": 25, "gap_infill_speed": 25, "initial_layer_speed": 15, "initial_layer_infill_speed": 20,
+             "bridge_speed": 20, "support_speed": 30, "support_interface_speed": 20,
+             "default_acceleration": 2000, "outer_wall_acceleration": 1000, "inner_wall_acceleration": 2000,
+             "top_surface_acceleration": 1000, "travel_acceleration": 3000}}
+  ]
+}

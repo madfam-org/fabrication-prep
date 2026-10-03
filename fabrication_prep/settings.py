@@ -1,0 +1,139 @@
+"""Runtime configuration, read from the environment.
+
+Every field states where its value comes from in production (``json_schema_extra.source``): ``env`` is a
+plain variable in the Deployment, ``secret`` arrives through a Kubernetes Secret written by the platform,
+``addon`` is written by the platform's Postgres addon, and ``code`` never comes from the cluster (tests and
+local development only)."""
+
+from __future__ import annotations
+
+import base64
+import binascii
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LOCAL_ENVIRONMENTS = frozenset({"local", "test"})
+MIN_SIGNING_KEY_BYTES = 32
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=None, extra="ignore", case_sensitive=False)
+
+    fabrication_prep_env: str = Field("production", json_schema_extra={"source": "env"})
+
+    # Identity: Janua RS256 service tokens only (audience reserved for this service).
+    janua_issuer: str = Field("https://auth.madfam.io", json_schema_extra={"source": "env"})
+    janua_jwks_url: str = Field("", json_schema_extra={"source": "env"})  # default <issuer>/.well-known/jwks.json
+    janua_audience: str = Field("fabrication-prep-api", json_schema_extra={"source": "env"})
+    jwks_cache_seconds: int = Field(3600, json_schema_extra={"source": "env"})
+    jwks_path: str = Field("", json_schema_extra={"source": "code"})  # local/test only
+
+    # Database: the runtime role is NOT the schema owner (row-level security applies to it).
+    app_database_url: str = Field("", json_schema_extra={"source": "secret"})
+    database_url: str = Field("", json_schema_extra={"source": "addon"})  # owner; migrations only
+    app_db_role: str = Field("fabrication_prep_app", json_schema_extra={"source": "env"})
+    db_pool_min: int = Field(1, json_schema_extra={"source": "env"})
+    db_pool_max: int = Field(3, json_schema_extra={"source": "env"})
+    db_statement_timeout_ms: int = Field(15000, json_schema_extra={"source": "env"})
+    db_startup_retry_seconds: float = Field(30.0, json_schema_extra={"source": "env"})
+
+    # Artifact storage (content-addressed by sha256). Backend "fs" (a directory) or "s3" (any
+    # S3-compatible endpoint, e.g. Cloudflare R2). The bucket stays private: bytes leave only through the
+    # API's signed URLs (ADR-014).
+    artifact_backend: str = Field("fs", json_schema_extra={"source": "env"})
+    artifact_fs_root: str = Field("/var/lib/fabrication-prep/artifacts", json_schema_extra={"source": "env"})
+    s3_endpoint_url: str = Field("", json_schema_extra={"source": "env"})
+    s3_bucket: str = Field("", json_schema_extra={"source": "env"})
+    s3_region: str = Field("auto", json_schema_extra={"source": "env"})
+    s3_prefix: str = Field("artifacts/", json_schema_extra={"source": "env"})
+    s3_access_key_id: str = Field("", json_schema_extra={"source": "secret"})
+    s3_secret_access_key: str = Field("", json_schema_extra={"source": "secret"})
+
+    # Signed download URLs: "kid:base64key[,kid:base64key...]"; the first key signs, all verify (rotation).
+    artifact_url_keys: str = Field("", json_schema_extra={"source": "secret"})
+    artifact_url_ttl_seconds: int = Field(900, json_schema_extra={"source": "env"})
+    public_base_url: str = Field("https://fabrication-prep-api.madfam.io", json_schema_extra={"source": "env"})
+
+    # Input fetching (render bundles): only these hosts, HTTPS outside local/test, bounded size and time.
+    input_allowed_hosts: str = Field("", json_schema_extra={"source": "env"})  # comma-separated
+    input_max_bytes: int = Field(256 * 1024 * 1024, json_schema_extra={"source": "env"})
+    input_timeout_seconds: float = Field(60.0, json_schema_extra={"source": "env"})
+
+    # Slicer and worker.
+    orcaslicer_bin: str = Field("/opt/orcaslicer/bin/orca-slicer", json_schema_extra={"source": "env"})
+    slice_timeout_seconds: int = Field(900, json_schema_extra={"source": "env"})
+    worker_workdir: str = Field("/var/lib/fabrication-prep/work", json_schema_extra={"source": "env"})
+    worker_lease_seconds: int = Field(120, json_schema_extra={"source": "env"})
+    worker_poll_seconds: float = Field(2.0, json_schema_extra={"source": "env"})
+    worker_heartbeat_file: str = Field(
+        "/var/lib/fabrication-prep/work/worker-heartbeat", json_schema_extra={"source": "env"}
+    )
+    job_max_attempts: int = Field(3, json_schema_extra={"source": "env"})
+    retry_backoff_seconds: int = Field(30, json_schema_extra={"source": "env"})
+
+    max_request_bytes: int = Field(256 * 1024, json_schema_extra={"source": "env"})
+    log_level: str = Field("INFO", json_schema_extra={"source": "env"})
+
+    @property
+    def is_local(self) -> bool:
+        return self.fabrication_prep_env in LOCAL_ENVIRONMENTS
+
+    @property
+    def effective_jwks_url(self) -> str:
+        return self.janua_jwks_url or f"{self.janua_issuer.rstrip('/')}/.well-known/jwks.json"
+
+    @property
+    def allowed_input_hosts(self) -> frozenset[str]:
+        return frozenset(h.strip().lower() for h in self.input_allowed_hosts.split(",") if h.strip())
+
+    def url_signing_keys(self) -> list[tuple[str, bytes]]:
+        """[(kid, key)], signing key first. Raises when absent or weak: signed URLs fail closed."""
+        keys: list[tuple[str, bytes]] = []
+        for item in self.artifact_url_keys.split(","):
+            item = item.strip()
+            if not item:
+                continue
+            kid, sep, encoded = item.partition(":")
+            if not sep or not kid or not kid.replace("-", "").replace("_", "").isalnum():
+                raise RuntimeError("ARTIFACT_URL_KEYS entries must look like '<kid>:<base64 key>'")
+            try:
+                key = base64.b64decode(encoded, validate=True)
+            except (binascii.Error, ValueError):
+                raise RuntimeError("ARTIFACT_URL_KEYS: a key is not valid base64") from None
+            if len(key) < MIN_SIGNING_KEY_BYTES:
+                raise RuntimeError(f"ARTIFACT_URL_KEYS: keys must be at least {MIN_SIGNING_KEY_BYTES} bytes")
+            keys.append((kid, key))
+        if not keys:
+            raise RuntimeError("ARTIFACT_URL_KEYS is not set; signed artifact URLs cannot be issued")
+        return keys
+
+    def validate_runtime(self) -> None:
+        if self.jwks_path and not self.is_local:
+            raise RuntimeError("JWKS_PATH is honoured only when FABRICATION_PREP_ENV is local or test")
+        if self.db_pool_max < 1 or self.db_pool_min < 0 or self.db_pool_min > self.db_pool_max:
+            raise RuntimeError("DB_POOL_MIN/DB_POOL_MAX are inconsistent")
+        if self.db_pool_max > 10:
+            raise RuntimeError("DB_POOL_MAX above 10 breaks the fleet connection budget; change it deliberately")
+        if self.artifact_backend not in ("fs", "s3"):
+            raise RuntimeError("ARTIFACT_BACKEND must be 'fs' or 's3'")
+        if not 60 <= self.artifact_url_ttl_seconds <= 3600:
+            raise RuntimeError("ARTIFACT_URL_TTL_SECONDS must be between 60 and 3600 (short-lived URLs)")
+        if not self.is_local and not self.public_base_url.startswith("https://"):
+            raise RuntimeError("PUBLIC_BASE_URL must be https outside local/test")
+        if self.worker_lease_seconds < 30:
+            raise RuntimeError("WORKER_LEASE_SECONDS below 30 makes leases expire during normal heartbeats")
+        if self.job_max_attempts < 1:
+            raise RuntimeError("JOB_MAX_ATTEMPTS must be at least 1")
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    s = Settings()
+    s.validate_runtime()
+    return s
+
+
+def reset_settings_cache() -> None:
+    get_settings.cache_clear()
