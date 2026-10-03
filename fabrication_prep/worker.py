@@ -69,9 +69,10 @@ class Worker:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.touch()
 
-    def run_forever(self) -> None:
-        signal.signal(signal.SIGTERM, self.stop)
-        signal.signal(signal.SIGINT, self.stop)
+    def run_forever(self, install_signals: bool = True) -> None:
+        if install_signals:
+            signal.signal(signal.SIGTERM, self.stop)
+            signal.signal(signal.SIGINT, self.stop)
         log.info("worker started", extra={"worker": self.worker_id})
         while not self._stop.is_set():
             self.heartbeat()

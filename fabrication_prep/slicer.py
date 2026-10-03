@@ -275,7 +275,8 @@ def run_slicer(
         raise SlicerError("slicer_timeout", f"slicing took longer than {int(timeout)} s", True)
     if result.returncode != 0:
         detail = _result_json(workdir)
-        reason = detail.get("error_string") or (result.log_tail[-1] if result.log_tail else "no output")
+        # The CLI's useful line usually precedes its final "run found error, exit"; keep the last three.
+        reason = detail.get("error_string") or (" | ".join(result.log_tail[-3:]) if result.log_tail else "no output")
         # Killed by a signal (OOM, eviction) is worth a retry; a clean non-zero exit is the slicer refusing
         # this input with these settings, which a retry would repeat.
         transient = result.returncode < 0
