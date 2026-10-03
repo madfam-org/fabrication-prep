@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local development
+.dev-keys/
+.artifacts/
+.env
+.env.*
+*.dmg
+*.AppImage
+squashfs-root/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
