@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# Public repository: GitHub-hosted runners on purpose (pull requests from forks must never execute on
+# MADFAM's own runners). Pinned to ubuntu-24.04. Nothing in this workflow pushes images or deploys.
+jobs:
+  test:
+    name: lint, tests (PostgreSQL), licences
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Throwaway service container: trust auth, so no password exists anywhere in this repo.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      FABRICATION_PREP_TEST_ADMIN_URL: postgresql://fabrication_prep_owner@127.0.0.1:5432/fabrication_prep_test
+      FABRICATION_PREP_TEST_APP_URL: postgresql://fabrication_prep_app@127.0.0.1:5432/fabrication_prep_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: python -m pip install --upgrade pip && python -m pip install -e '.[dev]'
+      - name: Lint
+        run: ruff check . && ruff format --check .
+      - name: Test database roles
+        run: psql -h 127.0.0.1 -U postgres -v ON_ERROR_STOP=1 -f scripts/test-db-setup.sql
+      - name: Tests (coverage gate 85 %; real-slicer tests run in the image job)
+        run: pytest -q -m "not orcaslicer" --cov=fabrication_prep --cov-report=term --cov-fail-under=85
+      - name: Shipped profiles match their catalog digests
+        run: fabrication-prep check-profiles
+      - name: Licence gate (runtime dependencies only)
+        run: |
+          python -m venv /tmp/runtime
+          /tmp/runtime/bin/python -m pip install -q . pip-licenses
+          PYTHON=/tmp/runtime/bin/python scripts/check-licenses.sh
+
+  vocab:
+    name: vocabulary derivation is reproducible
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch hyperobjects-spec at the recorded commit
+        run: |
+          COMMIT=$(python3 -c "import json;print(json.load(open('fabrication_prep/vocab/fabrication.json'))['source']['commit'])")
+          git clone --filter=blob:none --no-checkout https://github.com/madfam-org/hyperobjects-spec.git /tmp/spec
+          git -C /tmp/spec fetch -q origin "$COMMIT"
+          echo "COMMIT=$COMMIT" >> "$GITHUB_ENV"
+      - name: Re-derive and compare
+        run: python3 scripts/sync_vocab.py --spec /tmp/spec --rev "$COMMIT" --check
+
+  manifests:
+    name: kustomize render + manifest rules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch kustomize
+        run: |
+          curl -sSLo kustomize.tgz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.5.0/kustomize_v5.5.0_linux_amd64.tar.gz
+          tar -xzf kustomize.tgz && chmod +x kustomize
+      - name: Render production overlay
+        run: ./kustomize build infra/k8s/production > /tmp/render.yaml && grep -c '^kind:' /tmp/render.yaml
+      - name: Manifest rules
+        run: python3 -m pip install -q pyyaml && python3 scripts/check_manifests.py /tmp/render.yaml
+
+  image:
+    name: docker build + restricted smoke (Linux slicer proof)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (no push)
+        run: |
+          docker build -t fabrication-prep-api:ci .
+          docker build -t fabrication-prep-worker:ci -f Dockerfile.worker .
+          docker build -t fabrication-prep-web:ci -f web/Dockerfile .
+      - name: API image under the pod's restrictions
+        run: |
+          H="--user 1001 --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp"
+          docker run --rm $H fabrication-prep-api:ci python -c "import fabrication_prep.app; print('import ok')"
+          docker run --rm $H fabrication-prep-api:ci sh -c '! python -c "import pip" 2>/dev/null && ! command -v pip' && echo "no pip in the API image"
+          docker run --rm $H fabrication-prep-api:ci fabrication-prep check-profiles
+      - name: Worker image slices for both targets (OrcaSlicer Linux CLI, headless, read-only root)
+        run: |
+          H="--user 1001 --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp --tmpfs /var/lib/fabrication-prep/work"
+          docker run --rm $H fabrication-prep-worker:ci sh -c '! python -c "import pip" 2>/dev/null' && echo "no pip in the worker image"
+          for target in klipper_gcode bambu_3mf; do
+            docker run --rm $H fabrication-prep-worker:ci \
+              fabrication-prep selftest-slice --target "$target"
+          done
+      - name: Profiles rebuilt from the Linux release equal the shipped profiles
+        run: |
+          PROFILES=$(docker run --rm fabrication-prep-worker:ci sh -c 'find /opt/orcaslicer -maxdepth 4 -type d -path "*resources/profiles" | head -1')
+          echo "profiles at $PROFILES"
+          docker run --rm --user "$(id -u)" -v "$PWD:/src" -w /src fabrication-prep-worker:ci \
+            python scripts/build_profiles.py --orca-profiles "$PROFILES"
+          git diff --exit-code -- fabrication_prep/profiles
+      - name: Landing image
+        run: |
+          H="--user 1001 --cap-drop ALL --security-opt no-new-privileges --read-only"
+          docker run --rm $H --tmpfs /data --tmpfs /config fabrication-prep-web:ci caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          docker run -d --name web $H --tmpfs /data --tmpfs /config -p 18080:8080 fabrication-prep-web:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:18080/health && break || sleep 1; done
+          curl -fsS -o /dev/null http://127.0.0.1:18080/ && echo "landing serves"
+          docker rm -f web

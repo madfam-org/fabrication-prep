@@ -1,0 +1,120 @@
+# Default deny for every fabrication-prep pod; then: the tunnel may reach the API (8000) and the landing (8080);
+# the API and the worker may reach DNS, the data namespace (Postgres and its pooler) and 443 (Janua JWKS,
+# the S3-compatible artifact store, render-bundle hosts). The worker accepts no ingress at all. The landing
+# has no egress beyond DNS. Peers use one selector each.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: fabrication-prep
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: fabrication-prep
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cloudflared-to-api
+  namespace: fabrication-prep
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fabrication-prep-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflare-tunnel
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cloudflared-to-web
+  namespace: fabrication-prep
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fabrication-prep-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflare-tunnel
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: fabrication-prep
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: fabrication-prep
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-data-egress
+  namespace: fabrication-prep
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [fabrication-prep-api, fabrication-prep-worker]
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: data
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-https-egress
+  namespace: fabrication-prep
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [fabrication-prep-api, fabrication-prep-worker]
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443

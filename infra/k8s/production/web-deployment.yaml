@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabrication-prep-web
+  namespace: fabrication-prep
+  labels:
+    app.kubernetes.io/name: fabrication-prep-web
+    app.kubernetes.io/part-of: fabrication-prep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fabrication-prep-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fabrication-prep-web
+        app.kubernetes.io/part-of: fabrication-prep
+        app: fabrication-prep-web
+        enclii.dev/service: fabrication-prep-web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: web
+          image: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-web
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /config
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 64Mi }
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 2
+            periodSeconds: 10
+      volumes:
+        - name: data
+          emptyDir: { sizeLimit: 16Mi }
+        - name: config
+          emptyDir: { sizeLimit: 16Mi }

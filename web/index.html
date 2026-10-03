@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fabrication-prep — preparación de fabricación de MADFAM</title>
+<meta name="description" content="fabrication-prep convierte un diseño generado por MADFAM en un archivo listo para imprimir (G-code para Klipper, 3MF laminado para Bambu) con OrcaSlicer y perfiles versionados. Software libre AGPL-3.0.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232f4a2a'/%3E%3Cg fill='%23efe7cf'%3E%3Crect x='14' y='16' width='36' height='5' rx='2'/%3E%3Crect x='14' y='26' width='36' height='5' rx='2'/%3E%3Crect x='14' y='36' width='36' height='5' rx='2'/%3E%3Crect x='14' y='46' width='36' height='5' rx='2'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root { --bg:#f6f5f1; --ink:#1b1c1e; --muted:#55585e; --line:#d9d6cc; --accent:#2f4a2a; --accent-ink:#efe7cf; --card:#ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#13161b; --ink:#eceae4; --muted:#a7a9ad; --line:#2a2f37; --accent:#b9d3a6; --accent-ink:#121a10; --card:#1a1e25; } }
+  * { box-sizing:border-box }
+  html { color-scheme: light dark }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+  a { color:inherit }
+  .skip { position:absolute; left:-999px } .skip:focus { left:1rem; top:1rem; background:var(--card); padding:.5rem 1rem; z-index:9 }
+  header, main, footer { max-width:60rem; margin:0 auto; padding:0 1rem }
+  header { padding-top:2.5rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap }
+  .brand { font-weight:700; letter-spacing:.02em; font-size:1.25rem }
+  .brand small { display:block; font-weight:400; color:var(--muted); font-size:.85rem }
+  nav { display:flex; flex-wrap:wrap; gap:.3rem 1rem }
+  nav a { white-space:nowrap; text-decoration:none; color:var(--muted) } nav a:hover, nav a:focus { color:var(--ink); text-decoration:underline }
+  .hero { padding:3rem 0 2.25rem; border-bottom:1px solid var(--line) }
+  .hero h1 { font-size:clamp(1.8rem, 4vw, 2.6rem); line-height:1.15; margin:0 0 1rem; max-width:34ch }
+  .hero p { font-size:1.1rem; max-width:62ch; color:var(--muted) }
+  .pill { display:inline-block; padding:.2rem .7rem; border:1px solid var(--line); border-radius:999px; font-size:.8rem; color:var(--muted); margin-bottom:1rem }
+  section { padding:2.25rem 0; border-bottom:1px solid var(--line) }
+  h2 { font-size:1.35rem; margin:0 0 1rem }
+  .grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(15rem, 1fr)) }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1.1rem 1.2rem }
+  .card h3 { margin:0 0 .4rem; font-size:1.05rem }
+  .card p { margin:0; color:var(--muted); font-size:.95rem }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem; overflow-x:auto; font-size:.85rem; line-height:1.45 }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap:anywhere }
+  table { width:100%; border-collapse:collapse; font-size:.92rem }
+  th, td { text-align:left; padding:.45rem .5rem; border-bottom:1px solid var(--line); vertical-align:top }
+  .table-wrap { overflow-x:auto }
+  .cta { display:inline-block; background:var(--accent); color:var(--accent-ink); padding:.7rem 1.1rem; border-radius:10px; text-decoration:none; font-weight:600 }
+  .cta:focus-visible, a:focus-visible { outline:3px solid var(--accent); outline-offset:3px }
+  footer { padding:2rem 1rem 3rem; color:var(--muted); font-size:.9rem }
+  ul.plain { padding-left:1.2rem } ul.plain li { margin:.35rem 0 }
+  .en { border-left:3px solid var(--line); padding-left:1rem; color:var(--muted) }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<header>
+  <div class="brand">fabrication-prep<small>preparación de fabricación · MADFAM</small></div>
+  <nav aria-label="Secciones"><a href="#que-hace">Qué hace</a><a href="#perfiles">Perfiles</a><a href="#api">API</a><a href="#estado">Estado</a><a href="https://github.com/madfam-org/fabrication-prep">Código</a></nav>
+</header>
+<main id="main">
+  <section class="hero" aria-labelledby="h1">
+    <span class="pill">v1 · en desarrollo · AGPL-3.0</span>
+    <h1 id="h1">De un diseño generado a un archivo que la impresora entiende, con cada ajuste registrado.</h1>
+    <p>fabrication-prep recibe una pieza generada por los motores de MADFAM —la geometría y su <code>variables.json</code>— y la lamina con OrcaSlicer usando perfiles de impresora, filamento y proceso versionados. Entrega G-code para impresoras Klipper o un 3MF laminado para impresoras Bambu, más un <code>slicer-variables.json</code> que dice exactamente con qué se laminó.</p>
+    <p class="en">In English: fabrication-prep takes a part generated by MADFAM's engines (geometry plus its variables.json) and slices it with OrcaSlicer using versioned printer, filament and process profiles. It returns G-code for Klipper printers or a sliced 3MF for Bambu printers, plus a slicer-variables.json recording exactly how it was sliced.</p>
+  </section>
+
+  <section id="que-hace" aria-labelledby="h-que">
+    <h2 id="h-que">Qué hace</h2>
+    <div class="grid">
+      <div class="card"><h3>Laminado reproducible</h3><p>Cada trabajo registra el resumen (sha256) de la pieza de entrada, de cada perfil y de los valores efectivos que OrcaSlicer informó haber usado, además de su versión.</p></div>
+      <div class="card"><h3>Requisitos del producto</h3><p>Si el diseño pide, por ejemplo, al menos 3 perímetros o PETG, la solicitud que no lo cumpla se rechaza y se indica qué parámetro, qué rango y qué valor fallaron.</p></div>
+      <div class="card"><h3>Descargas firmadas</h3><p>Los archivos solo se entregan mediante enlaces de corta duración atados al resumen del archivo. No hay enlaces públicos a un almacén.</p></div>
+      <div class="card"><h3>No mueve máquinas</h3><p>Este servicio prepara archivos. El envío a una impresora lo hace el sistema de manufactura (pravara-mes) en el sitio, después de verificar el resumen.</p></div>
+    </div>
+  </section>
+
+  <section id="perfiles" aria-labelledby="h-perf">
+    <h2 id="h-perf">Perfiles iniciales</h2>
+    <p>Construidos a partir de los perfiles de sistema de OrcaSlicer 2.4.2 (AGPL-3.0); cada valor indica de qué archivo de OrcaSlicer proviene o si es un ajuste nuestro, con su razón. Los perfiles seguros para TPU son autoría de MADFAM y aún no se han validado en una impresora física.</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Impresora</th><th scope="col">Salida</th><th scope="col">Filamentos</th><th scope="col">Procesos</th></tr></thead>
+      <tbody>
+        <tr><td>Klipper CoreXY 350 mm (clase Voron 2.4), boquilla 0.4</td><td>G-code (<code>.gcode</code>)</td><td>PLA, PETG, TPU 95A</td><td>Estándar 0.20 mm · Seguro para TPU 0.20 mm</td></tr>
+        <tr><td>Bambu Lab A1, boquilla 0.4</td><td>3MF laminado (<code>.gcode.3mf</code>)</td><td>PLA, PETG, TPU 95A</td><td>Estándar 0.20 mm · Seguro para TPU 0.20 mm</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section id="api" aria-labelledby="h-api">
+    <h2 id="h-api">Cómo se usa</h2>
+    <p>Solo para clientes de servicio de MADFAM con un token RS256 emitido por Janua (audiencia <code>fabrication-prep-api</code>, alcance <code>fabrication-prep:slice</code>). No hay cuentas de usuario.</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Ruta</th><th scope="col">Para qué</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /v1/slice-jobs</code></td><td>Crear un trabajo de laminado (pieza, perfiles, ajustes, requisitos, destino)</td></tr>
+        <tr><td><code>GET /v1/slice-jobs/{id}</code></td><td>Estado y, al terminar, enlaces firmados al archivo y a <code>slicer-variables.json</code></td></tr>
+        <tr><td><code>GET /v1/profiles</code></td><td>Catálogo de perfiles con versión y resumen</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section id="estado" aria-labelledby="h-est">
+    <h2 id="h-est">Estado</h2>
+    <p>La versión 1 está en desarrollo y todavía no está en servicio en <code>fabrication-prep-api.madfam.io</code>. Lo que existe hoy: el servicio, sus pruebas, los perfiles iniciales y esta página. El laminado con OrcaSlicer 2.4.2 se comprobó localmente en ambos destinos; la imagen Linux del trabajador se construye y se prueba en la integración continua.</p>
+    <p class="en">Status: version 1 is in development and not yet serving. What exists today is the service, its tests, the starter profiles and this page. Slicing with OrcaSlicer 2.4.2 was checked locally for both targets; the Linux worker image is built and tested in CI.</p>
+    <p style="margin-top:1.5rem"><a class="cta" href="https://github.com/madfam-org/fabrication-prep">Ver el código en GitHub</a></p>
+  </section>
+</main>
+<footer>
+  <p>fabrication-prep es software libre bajo la licencia <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU AGPL-3.0</a> y usa <a href="https://github.com/OrcaSlicer/OrcaSlicer">OrcaSlicer</a> (AGPL-3.0). Parte del ecosistema <a href="https://madfam.io">MADFAM</a>. Esta página no usa cookies ni recopila datos.</p>
+</footer>
+</body>
+</html>
