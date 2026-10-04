@@ -146,6 +146,7 @@ Configuration is environment-only (`fabrication_prep/settings.py` documents each
 ## Documents
 
 * `AGENTS.md` — rules for agents and contributors working in this repository.
-* `docs/operator-setup.md` — the owner's steps: push, Janua, Enclii, database role, bucket, secrets, DNS.
+* `docs/operator-setup.md` — the owner's steps: push, Janua client, one `enclii onboard` (database, runtime role and
+  generated keys), `enclii buckets create`, deploy wiring, smoke. No step handles a credential.
 * `fabrication_prep/schemas/slicer-variables.schema.json` — the output document's JSON Schema.
 * MES-1 contract (MADFAM internal) §4 — this service's contract.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -128,6 +129,20 @@ def test_settings_validation_rules():
 def test_url_signing_keys_fail_closed():
     assert _settings().url_signing_keys()[0][0] == "a"
     for bad in ("", "nokey", "a:!!!", "a:" + base64.b64encode(b"short").decode(), "bad kid:" + "eA=="):
+        with pytest.raises(RuntimeError):
+            _settings(artifact_url_keys=bad).url_signing_keys()
+
+
+def test_url_signing_keys_accept_a_bare_generated_key():
+    # The platform generates ARTIFACT_URL_KEYS as unpadded base64url with no kid.
+    raw = bytes(range(32))
+    generated = base64.urlsafe_b64encode(raw).decode().rstrip("=")
+    keys = _settings(artifact_url_keys=generated).url_signing_keys()
+    assert keys == [("g" + hashlib.sha256(raw).hexdigest()[:8], raw)]
+    # A kid'd key can be prepended for a manual rotation; the bare one keeps verifying.
+    mixed = _settings(artifact_url_keys="k2:" + base64.b64encode(b"y" * 32).decode() + "," + generated)
+    assert [kid for kid, _ in mixed.url_signing_keys()] == ["k2", keys[0][0]]
+    for bad in ("!!!" * 15, base64.urlsafe_b64encode(b"short").decode().rstrip("="), "a" * 45):
         with pytest.raises(RuntimeError):
             _settings(artifact_url_keys=bad).url_signing_keys()
 

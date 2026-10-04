@@ -8,8 +8,9 @@
 #   fabrication-prep-worker  the slice worker (OrcaSlicer CLI inside). No port, no domain, no ingress.
 #   fabrication-prep-web     the landing at fabrication-prep.madfam.io (static, Caddy, non-root).
 #
-# Managed Postgres is provisioned AT onboard. The addon's credentials own the schema and are used ONLY by the
-# API's migrate init container; the API and the worker connect as a separate non-owner role
+# Postgres is provisioned AT onboard with generated passwords (`enclii onboard --db-name fabrication_prep
+# --generate-db-password --app-role fabrication_prep_app`). The owner URL (DATABASE_URL) is used ONLY by the
+# API's migrate init container; the API and the worker connect as the separate non-owner runtime role
 # (APP_DATABASE_URL) — see docs/operator-setup.md. Artifacts live in a PRIVATE S3-compatible bucket.
 #
 # Nothing here deploys by itself: there is no build-and-deploy workflow in this repository yet.
@@ -77,7 +78,7 @@ spec:
     - platform: janua
       reason: identity — RS256 service tokens (audience fabrication-prep-api, scope fabrication-prep:slice), JWKS
     - platform: enclii
-      reason: deploy, managed Postgres addon, secrets intake
+      reason: deploy, Postgres and runtime role with generated passwords, generated keys, bucket credentials
 ---
 apiVersion: enclii.dev/v1
 kind: Service

@@ -102,3 +102,51 @@ def test_rules_catch_forbidden_objects_and_a_worker_service():
         "spec": {"selector": {"app.kubernetes.io/name": "fabrication-prep-worker"}},
     }
     assert check_manifests.check(docs + [svc])
+
+
+# Keys Enclii writes into fabrication-prep-credentials: the generated owner and app-role URLs and the
+# generated URL-signing key (`enclii onboard --generate-db-password --app-role ... --generate-secret
+# ARTIFACT_URL_KEYS`), and the bucket credentials (`enclii buckets create`, provisioning/r2.go).
+ENCLII_WRITTEN_KEYS = {
+    "DATABASE_URL",
+    "APP_DATABASE_URL",
+    "ARTIFACT_URL_KEYS",
+    "R2_ENDPOINT_URL",
+    "R2_BUCKET_NAME",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+}
+
+
+def _secret_refs(docs: list[dict]) -> dict[str, set[str]]:
+    refs: dict[str, set[str]] = {}
+    for d in docs:
+        if d.get("kind") != "Deployment":
+            continue
+        spec = d["spec"]["template"]["spec"]
+        for c in spec.get("initContainers", []) + spec["containers"]:
+            for e in c.get("env", []):
+                ref = e.get("valueFrom", {}).get("secretKeyRef")
+                if ref:
+                    assert ref["name"] == "fabrication-prep-credentials"
+                    refs.setdefault(e["name"], set()).add(ref["key"])
+    return refs
+
+
+def test_deployments_read_only_keys_enclii_writes():
+    refs = _secret_refs(render())
+    read = set().union(*refs.values())
+    assert read <= ENCLII_WRITTEN_KEYS, read - ENCLII_WRITTEN_KEYS
+    assert refs["S3_ACCESS_KEY_ID"] == {"R2_ACCESS_KEY_ID"}
+    assert refs["S3_SECRET_ACCESS_KEY"] == {"R2_SECRET_ACCESS_KEY"}
+    assert refs["S3_ENDPOINT_URL"] == {"R2_ENDPOINT_URL"}
+    assert refs["S3_BUCKET"] == {"R2_BUCKET_NAME"}
+
+
+def test_input_allowed_hosts_is_plain_config_not_a_secret():
+    for d in render():
+        if d.get("kind") != "Deployment" or d["metadata"]["name"] == "fabrication-prep-web":
+            continue
+        env = {e["name"]: e for e in d["spec"]["template"]["spec"]["containers"][0]["env"]}
+        assert env["INPUT_ALLOWED_HOSTS"].get("value"), d["metadata"]["name"]
+        assert "valueFrom" not in env["INPUT_ALLOWED_HOSTS"]

@@ -1,0 +1,5 @@
+# Dockerfile-specific ignore file (BuildKit): the root .dockerignore excludes web/ for the API and
+# worker images; the landing image needs exactly its two files.
+*
+!web/Caddyfile
+!web/index.html
