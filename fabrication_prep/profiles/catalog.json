@@ -1,0 +1,152 @@
+{
+  "format": "madfam.fabrication-prep.profile-catalog",
+  "format_version": "1.0.0",
+  "orcaslicer": {"version": "2.4.2", "tag": "v2.4.2", "commit": "8500fcdccaa10b5099ac20d252af3a7c560046f1", "repository": "https://github.com/OrcaSlicer/OrcaSlicer", "profiles_path": "resources/profiles", "licence": "AGPL-3.0", "blob_url": "https://github.com/OrcaSlicer/OrcaSlicer/blob/v2.4.2/<path>"},
+  "authored_groups": {"bed_type_klipper": {"reason": "OrcaSlicer's CLI defaults curr_bed_type to 'Cool Plate' when no project file sets it (measured: M190 S35 with Generic PLA). Voron-class printers ship with a PEI spring-steel sheet; we pin the textured PEI plate so the filament's textured_plate_temp applies. The operator must match the sheet actually installed."}, "bed_type_bambu": {"reason": "Same CLI default as above. The value is OrcaSlicer's own default_bed_type for the 'Bambu Lab A1' machine model (resources/profiles/BBL/machine/Bambu Lab A1.json), which the CLI does not apply on its own."}, "tpu_safe": {"reason": "MADFAM authoring, not an OrcaSlicer value. The TPU 95A filament profiles cap volumetric flow at 3.2-3.6 mm3/s; at 0.2 mm layers and ~0.45 mm lines that is ~35-40 mm/s. Line speeds are set below that so the cap never silently rescales them, and accelerations are reduced for a soft filament in a direct-drive extruder. Not yet validated on a physical printer."}},
+  "profiles": [
+    {
+      "id": "klipper-corexy-350-0.4",
+      "version": 1,
+      "kind": "printer",
+      "label": {"es": "Impresora Klipper CoreXY 350 mm (clase Voron 2.4), boquilla 0.4", "en": "Klipper CoreXY 350 mm printer (Voron 2.4 class), 0.4 nozzle"},
+      "file": "printer/klipper-corexy-350-0.4@1.json",
+      "sha256": "7a54e487dbcc1e45fa6f65906b66f498143387dfca5a323c63b0018874a28dfe",
+      "base": {"vendor": "Voron", "name": "Voron 2.4 350 0.4 nozzle", "chain": [{"path": "resources/profiles/Voron/machine/fdm_machine_common.json", "blob": "921560eee865a9740a0192476872b4638edf3ef1"}, {"path": "resources/profiles/Voron/machine/fdm_klipper_common.json", "blob": "4d40f3d1686887968471e307da2c3d0009eadcfd"}, {"path": "resources/profiles/Voron/machine/Voron 2.4 350 0.4 nozzle.json", "blob": "fca4468a98d9e7898d3d2ecea3c3084bf4dda7a1"}]},
+      "authored": {"curr_bed_type": {"value": "Textured PEI Plate", "group": "bed_type_klipper"}},
+      "target": "klipper_gcode"
+    },
+    {
+      "id": "bambu-a1-0.4",
+      "version": 1,
+      "kind": "printer",
+      "label": {"es": "Bambu Lab A1, boquilla 0.4", "en": "Bambu Lab A1, 0.4 nozzle"},
+      "file": "printer/bambu-a1-0.4@1.json",
+      "sha256": "5ba1143f74e8c6de826b652b3a8e0376f8f5829fabb3f6471f29a28330aaa4d9",
+      "base": {"vendor": "BBL", "name": "Bambu Lab A1 0.4 nozzle", "chain": [{"path": "resources/profiles/BBL/machine/fdm_machine_common.json", "blob": "ed8e87d18dee9f874b53193bf7fb05cb3b86e608"}, {"path": "resources/profiles/BBL/machine/fdm_bbl_3dp_001_common.json", "blob": "e3670c57fdfccf1984be1db377ec2e3e426f7d8d"}, {"path": "resources/profiles/BBL/machine/Bambu Lab A1 0.4 nozzle.json", "blob": "c63d8f717cccb9e5edbbcca7fe80c11c70df7081"}]},
+      "authored": {"curr_bed_type": {"value": "Textured PEI Plate", "group": "bed_type_bambu"}},
+      "target": "bambu_3mf"
+    },
+    {
+      "id": "pla-generic-klipper",
+      "version": 1,
+      "kind": "filament",
+      "label": {"es": "PLA genérico", "en": "Generic PLA"},
+      "file": "filament/pla-generic-klipper@1.json",
+      "sha256": "7d345205a83fa4e6edc3b6e956151b5df1e24b1dd628b430dd39fed57b3fd79f",
+      "base": {"vendor": "OrcaFilamentLibrary", "name": "Generic PLA @System", "chain": [{"path": "resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_common.json", "blob": "ce95ca7c52dfb494fd66a04134bbf2744ce05f05"}, {"path": "resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_pla.json", "blob": "ae82d44129b5ca8c4340be9e4ffecb2b1a248b92"}, {"path": "resources/profiles/OrcaFilamentLibrary/filament/Generic PLA @System.json", "blob": "c018544fa5f8384eac1670602f69dac79d77284f"}]},
+      "authored": {},
+      "material_class": "pla",
+      "printers": ["klipper-corexy-350-0.4"]
+    },
+    {
+      "id": "petg-generic-klipper",
+      "version": 1,
+      "kind": "filament",
+      "label": {"es": "PETG genérico", "en": "Generic PETG"},
+      "file": "filament/petg-generic-klipper@1.json",
+      "sha256": "6e1ebf18ae2619646347d1f8448e58e4f369452b0def219c28e95a663e06000c",
+      "base": {"vendor": "OrcaFilamentLibrary", "name": "Generic PETG @System", "chain": [{"path": "resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_common.json", "blob": "ce95ca7c52dfb494fd66a04134bbf2744ce05f05"}, {"path": "resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_pet.json", "blob": "eabb12c7080135ec5c5f791e1ee96ae7020475a0"}, {"path": "resources/profiles/OrcaFilamentLibrary/filament/Generic PETG @System.json", "blob": "2eb975f56c8f93960a5c76d39053077a3147535d"}]},
+      "authored": {},
+      "material_class": "petg",
+      "printers": ["klipper-corexy-350-0.4"]
+    },
+    {
+      "id": "tpu-95a-klipper",
+      "version": 1,
+      "kind": "filament",
+      "label": {"es": "TPU 95A (valores del perfil Bambu TPU 95A de OrcaSlicer)", "en": "TPU 95A (values from OrcaSlicer's Bambu TPU 95A profile)"},
+      "file": "filament/tpu-95a-klipper@1.json",
+      "sha256": "236776ec1da1f87cca8c0f00b720730b8746b4e7357edab4211237fa02fab40f",
+      "base": {"vendor": "OrcaFilamentLibrary", "name": "Bambu TPU 95A @System", "chain": [{"path": "resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_common.json", "blob": "ce95ca7c52dfb494fd66a04134bbf2744ce05f05"}, {"path": "resources/profiles/OrcaFilamentLibrary/filament/base/fdm_filament_tpu.json", "blob": "30d9415ad3af5271b9ef93fd2fd086203045ed1c"}, {"path": "resources/profiles/OrcaFilamentLibrary/filament/Bambu/Bambu TPU 95A @base.json", "blob": "a79d6a575e7d8cf1e22556023468948bf8ef37d2"}, {"path": "resources/profiles/OrcaFilamentLibrary/filament/Bambu/Bambu TPU 95A @System.json", "blob": "5973e084b3d33c013c5c89ec9ccffbd6caca6614"}]},
+      "authored": {},
+      "material_class": "tpu-95a",
+      "printers": ["klipper-corexy-350-0.4"],
+      "requires_process_tag": "tpu-safe"
+    },
+    {
+      "id": "pla-generic-bambu-a1",
+      "version": 1,
+      "kind": "filament",
+      "label": {"es": "PLA genérico (A1)", "en": "Generic PLA (A1)"},
+      "file": "filament/pla-generic-bambu-a1@1.json",
+      "sha256": "4d0cd43c3d366b68ba8b92dc5377311650102a1bad9e49c087182871534c52fc",
+      "base": {"vendor": "BBL", "name": "Generic PLA @BBL A1", "chain": [{"path": "resources/profiles/BBL/filament/fdm_filament_common.json", "blob": "caa037c74be33d23f21a7825fb158bdd9f91586b"}, {"path": "resources/profiles/BBL/filament/fdm_filament_pla.json", "blob": "3c6713b86db5290b6509f0b2147b888cb8b852c3"}, {"path": "resources/profiles/BBL/filament/Generic PLA @base.json", "blob": "f5c584bc3eb98d4f891cd4f00232d0f7a556a4a1"}, {"path": "resources/profiles/BBL/filament/Generic PLA @BBL A1.json", "blob": "a9214818454f7778424cd34d18f63f86fe7cdc50"}]},
+      "authored": {},
+      "material_class": "pla",
+      "printers": ["bambu-a1-0.4"]
+    },
+    {
+      "id": "petg-generic-bambu-a1",
+      "version": 1,
+      "kind": "filament",
+      "label": {"es": "PETG genérico (A1)", "en": "Generic PETG (A1)"},
+      "file": "filament/petg-generic-bambu-a1@1.json",
+      "sha256": "0de5c16fe5906113732fe4b39fdc1a2188f5e405ddbdd49c11f48ee722a5bf83",
+      "base": {"vendor": "BBL", "name": "Generic PETG @BBL A1", "chain": [{"path": "resources/profiles/BBL/filament/fdm_filament_common.json", "blob": "caa037c74be33d23f21a7825fb158bdd9f91586b"}, {"path": "resources/profiles/BBL/filament/fdm_filament_pet.json", "blob": "8fde5f2faa0d2f835da710c70ce706540f5ce173"}, {"path": "resources/profiles/BBL/filament/Generic PETG @base.json", "blob": "8d59f692a3a1d091157f92f2b4567bcf6f75cd2f"}, {"path": "resources/profiles/BBL/filament/Generic PETG @BBL A1.json", "blob": "00a50550feb7cfc6a41d4fce5288982ec38bf12b"}]},
+      "authored": {},
+      "material_class": "petg",
+      "printers": ["bambu-a1-0.4"]
+    },
+    {
+      "id": "tpu-95a-bambu-a1",
+      "version": 1,
+      "kind": "filament",
+      "label": {"es": "TPU 95A (A1, valores del perfil Bambu TPU 95A de OrcaSlicer)", "en": "TPU 95A (A1, values from OrcaSlicer's Bambu TPU 95A profile)"},
+      "file": "filament/tpu-95a-bambu-a1@1.json",
+      "sha256": "8dc6ff742ed48e511d229fa36e56bf27c9d1af6caa939afc5d9db6c5be87166a",
+      "base": {"vendor": "BBL", "name": "Bambu TPU 95A @BBL A1", "chain": [{"path": "resources/profiles/BBL/filament/fdm_filament_common.json", "blob": "caa037c74be33d23f21a7825fb158bdd9f91586b"}, {"path": "resources/profiles/BBL/filament/fdm_filament_tpu.json", "blob": "f6ab1d3edf071dcf5bd7d5f42c89eba8a4e5e874"}, {"path": "resources/profiles/BBL/filament/Bambu TPU 95A @base.json", "blob": "2670e250e9f11db8421e2873b11142da02683ede"}, {"path": "resources/profiles/BBL/filament/Bambu TPU 95A @BBL A1.json", "blob": "6e003d4717f67d06781b84dbee720d26b1683206"}]},
+      "authored": {},
+      "material_class": "tpu-95a",
+      "printers": ["bambu-a1-0.4"],
+      "requires_process_tag": "tpu-safe"
+    },
+    {
+      "id": "standard-0.20-klipper",
+      "version": 1,
+      "kind": "process",
+      "label": {"es": "Estándar 0.20 mm", "en": "Standard 0.20 mm"},
+      "file": "process/standard-0.20-klipper@1.json",
+      "sha256": "ddebff7f1c70bd76480f2a3fb823bd12f1a6e7f931411a3e6f5978ed2358de14",
+      "base": {"vendor": "Voron", "name": "0.20mm Standard @Voron", "chain": [{"path": "resources/profiles/Voron/process/fdm_process_common.json", "blob": "d8955e2bfb36572d25a7ef857dae1288df815dd5"}, {"path": "resources/profiles/Voron/process/fdm_process_voron_common.json", "blob": "f5ad2128d04ab7e0d76be76d104e079ee50c5707"}, {"path": "resources/profiles/Voron/process/0.20mm Standard @Voron.json", "blob": "0f95db44f94d1aa711b665cb08bd920da4e36cc0"}]},
+      "authored": {},
+      "printers": ["klipper-corexy-350-0.4"],
+      "tags": ["standard"]
+    },
+    {
+      "id": "standard-0.20-bambu-a1",
+      "version": 1,
+      "kind": "process",
+      "label": {"es": "Estándar 0.20 mm (A1)", "en": "Standard 0.20 mm (A1)"},
+      "file": "process/standard-0.20-bambu-a1@1.json",
+      "sha256": "352e9ecb226cff0ec84857950c55ff4173c74ca6c97bdbed1ab1962083681b58",
+      "base": {"vendor": "BBL", "name": "0.20mm Standard @BBL A1", "chain": [{"path": "resources/profiles/BBL/process/fdm_process_common.json", "blob": "6f715882cc43c253ac598266445e716b4badc235"}, {"path": "resources/profiles/BBL/process/fdm_process_single_common.json", "blob": "36bd1611d56e6d83ced9c3ffd9d94121a811e160"}, {"path": "resources/profiles/BBL/process/fdm_process_single_0.20.json", "blob": "12dfa47697c8d3d44487c0dc90e91970d0a8f49d"}, {"path": "resources/profiles/BBL/process/0.20mm Standard @BBL A1.json", "blob": "03578962a4ac9faea39635aacb7ab9de2865e56d"}]},
+      "authored": {},
+      "printers": ["bambu-a1-0.4"],
+      "tags": ["standard"]
+    },
+    {
+      "id": "tpu-safe-0.20-klipper",
+      "version": 1,
+      "kind": "process",
+      "label": {"es": "Seguro para TPU 0.20 mm", "en": "TPU-safe 0.20 mm"},
+      "file": "process/tpu-safe-0.20-klipper@1.json",
+      "sha256": "bb63baa20c3fc6c1a37c08f9d03573235b55d8322b829a4ddf298b920ae9db2b",
+      "base": {"vendor": "Voron", "name": "0.20mm Standard @Voron", "chain": [{"path": "resources/profiles/Voron/process/fdm_process_common.json", "blob": "d8955e2bfb36572d25a7ef857dae1288df815dd5"}, {"path": "resources/profiles/Voron/process/fdm_process_voron_common.json", "blob": "f5ad2128d04ab7e0d76be76d104e079ee50c5707"}, {"path": "resources/profiles/Voron/process/0.20mm Standard @Voron.json", "blob": "0f95db44f94d1aa711b665cb08bd920da4e36cc0"}]},
+      "authored": {"outer_wall_speed": {"value": "25", "group": "tpu_safe"}, "inner_wall_speed": {"value": "30", "group": "tpu_safe"}, "sparse_infill_speed": {"value": "30", "group": "tpu_safe"}, "internal_solid_infill_speed": {"value": "30", "group": "tpu_safe"}, "top_surface_speed": {"value": "25", "group": "tpu_safe"}, "gap_infill_speed": {"value": "25", "group": "tpu_safe"}, "initial_layer_speed": {"value": "15", "group": "tpu_safe"}, "initial_layer_infill_speed": {"value": "20", "group": "tpu_safe"}, "bridge_speed": {"value": "20", "group": "tpu_safe"}, "support_speed": {"value": "30", "group": "tpu_safe"}, "support_interface_speed": {"value": "20", "group": "tpu_safe"}, "default_acceleration": {"value": "2000", "group": "tpu_safe"}, "outer_wall_acceleration": {"value": "1000", "group": "tpu_safe"}, "inner_wall_acceleration": {"value": "2000", "group": "tpu_safe"}, "top_surface_acceleration": {"value": "1000", "group": "tpu_safe"}, "travel_acceleration": {"value": "3000", "group": "tpu_safe"}},
+      "printers": ["klipper-corexy-350-0.4"],
+      "tags": ["tpu-safe"]
+    },
+    {
+      "id": "tpu-safe-0.20-bambu-a1",
+      "version": 1,
+      "kind": "process",
+      "label": {"es": "Seguro para TPU 0.20 mm (A1)", "en": "TPU-safe 0.20 mm (A1)"},
+      "file": "process/tpu-safe-0.20-bambu-a1@1.json",
+      "sha256": "bf04af61fb0f07410b0753510f13ce4cd921971fafe1a76dda31ebccce1b68c1",
+      "base": {"vendor": "BBL", "name": "0.20mm Standard @BBL A1", "chain": [{"path": "resources/profiles/BBL/process/fdm_process_common.json", "blob": "6f715882cc43c253ac598266445e716b4badc235"}, {"path": "resources/profiles/BBL/process/fdm_process_single_common.json", "blob": "36bd1611d56e6d83ced9c3ffd9d94121a811e160"}, {"path": "resources/profiles/BBL/process/fdm_process_single_0.20.json", "blob": "12dfa47697c8d3d44487c0dc90e91970d0a8f49d"}, {"path": "resources/profiles/BBL/process/0.20mm Standard @BBL A1.json", "blob": "03578962a4ac9faea39635aacb7ab9de2865e56d"}]},
+      "authored": {"outer_wall_speed": {"value": ["25"], "group": "tpu_safe"}, "inner_wall_speed": {"value": ["30"], "group": "tpu_safe"}, "sparse_infill_speed": {"value": ["30"], "group": "tpu_safe"}, "internal_solid_infill_speed": {"value": ["30"], "group": "tpu_safe"}, "top_surface_speed": {"value": ["25"], "group": "tpu_safe"}, "gap_infill_speed": {"value": ["25"], "group": "tpu_safe"}, "initial_layer_speed": {"value": ["15"], "group": "tpu_safe"}, "initial_layer_infill_speed": {"value": ["20"], "group": "tpu_safe"}, "bridge_speed": {"value": ["20"], "group": "tpu_safe"}, "support_speed": {"value": ["30"], "group": "tpu_safe"}, "support_interface_speed": {"value": ["20"], "group": "tpu_safe"}, "default_acceleration": {"value": ["2000"], "group": "tpu_safe"}, "outer_wall_acceleration": {"value": ["1000"], "group": "tpu_safe"}, "inner_wall_acceleration": {"value": ["2000"], "group": "tpu_safe"}, "top_surface_acceleration": {"value": ["1000"], "group": "tpu_safe"}, "travel_acceleration": {"value": ["3000"], "group": "tpu_safe"}},
+      "printers": ["bambu-a1-0.4"],
+      "tags": ["tpu-safe"]
+    }
+  ]
+}

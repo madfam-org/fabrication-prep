@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabrication-prep-api
+  namespace: fabrication-prep
+  labels:
+    app.kubernetes.io/name: fabrication-prep-api
+    app.kubernetes.io/part-of: fabrication-prep
+  annotations:
+    # A Secret change does not restart pods on its own.
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fabrication-prep-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fabrication-prep-api
+        app.kubernetes.io/part-of: fabrication-prep
+        # enclii convention labels.
+        app: fabrication-prep
+        enclii.dev/service: fabrication-prep
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-credentials
+      initContainers:
+        # Migrations run as the schema OWNER (the Postgres addon's credentials) and grant the runtime
+        # privileges to APP_DB_ROLE. The API and worker containers never see owner credentials.
+        - name: migrate
+          image: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-api
+          command: ["python", "-m", "fabrication_prep.cli", "migrate"]
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: APP_DB_ROLE
+              value: fabrication_prep_app
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: fabrication-prep-credentials
+                  key: DATABASE_URL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+      containers:
+        - name: api
+          # Unpinned name on purpose: the digest pin lives in kustomization.yaml (images:).
+          image: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-api
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: FABRICATION_PREP_ENV
+              value: production
+            - name: JANUA_ISSUER
+              value: https://auth.madfam.io
+            - name: JANUA_AUDIENCE
+              value: fabrication-prep-api
+            - name: PUBLIC_BASE_URL
+              value: https://fabrication-prep-api.madfam.io
+            - name: ARTIFACT_BACKEND
+              value: s3
+            - name: ARTIFACT_URL_TTL_SECONDS
+              value: "900"
+            - name: DB_POOL_MIN
+              value: "1"
+            - name: DB_POOL_MAX
+              value: "3"
+            - name: LOG_LEVEL
+              value: INFO
+            - name: APP_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: APP_DATABASE_URL } }
+            - name: ARTIFACT_URL_KEYS
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: ARTIFACT_URL_KEYS } }
+            # Not a secret: the public hosts render bundles are fetched from (yantra4d's API).
+            - name: INPUT_ALLOWED_HOSTS
+              value: api.yantra4d.com
+            # Object-store credentials as `enclii buckets create` writes them (R2_* keys, bucket-scoped
+            # token, never printed); the service keeps its own S3_* names.
+            - name: S3_ENDPOINT_URL
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_ENDPOINT_URL } }
+            - name: S3_BUCKET
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_BUCKET_NAME } }
+            - name: S3_ACCESS_KEY_ID
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_ACCESS_KEY_ID } }
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_SECRET_ACCESS_KEY } }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

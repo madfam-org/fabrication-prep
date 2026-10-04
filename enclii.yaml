@@ -1,0 +1,158 @@
+# Enclii manifest — fabrication-prep, MADFAM's slicing service (Digital Twins MES programme, Phase 5;
+# owner decision 2026-10-02: slicing runs in a separate service, PUBLIC repo, AGPL-3.0-only).
+#
+# Three services:
+#   fabrication-prep         the API at fabrication-prep-api.madfam.io. Every /v1 route needs a Janua service
+#                            token (audience fabrication-prep-api, scope fabrication-prep:slice); artifact
+#                            downloads need a short-lived signed URL instead.
+#   fabrication-prep-worker  the slice worker (OrcaSlicer CLI inside). No port, no domain, no ingress.
+#   fabrication-prep-web     the landing at fabrication-prep.madfam.io (static, Caddy, non-root).
+#
+# Postgres is provisioned AT onboard with generated passwords (`enclii onboard --db-name fabrication_prep
+# --generate-db-password --app-role fabrication_prep_app`). The owner URL (DATABASE_URL) is used ONLY by the
+# API's migrate init container; the API and the worker connect as the separate non-owner runtime role
+# (APP_DATABASE_URL) — see docs/operator-setup.md. Artifacts live in a PRIVATE S3-compatible bucket.
+#
+# Nothing here deploys by itself: there is no build-and-deploy workflow in this repository yet.
+apiVersion: enclii.dev/v1
+kind: Project
+metadata:
+  name: fabrication-prep
+spec:
+  promotion:
+    pattern: manual
+    min_soak_minutes: 15
+    require_smoke_pass: true
+---
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: fabrication-prep
+  project: fabrication-prep
+  description: fabrication-prep API — slice jobs, profiles, signed artifact downloads
+spec:
+  status:
+    enabled: true
+    entries:
+      - name: fabrication-prep (API)
+        url: https://fabrication-prep-api.madfam.io/health
+        href: https://fabrication-prep.madfam.io
+        group: Platform
+        family: MADFAM Platform
+        description: Slicing service — slice jobs, profiles, signed downloads
+  build:
+    type: dockerfile
+    dockerfile: Dockerfile
+    context: .
+    source:
+      git:
+        repository: https://github.com/madfam-org/fabrication-prep
+        branch: main
+        autoDeploy: false
+  runtime:
+    port: 8000
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits: { cpu: "1000m", memory: "512Mi" }
+    healthCheck: /health
+    healthCheckTimeoutSeconds: 3
+  domains:
+    - name: fabrication-prep-api.madfam.io
+      environment: production
+      tlsEnabled: true
+  addons:
+    - type: postgres
+      name: fabrication-prep-db
+  slo:
+    availability: 99.5
+    latencyP99Ms: 2000
+  # Ingress only through the tunnel. Egress: DNS, the data namespace, 443 (Janua JWKS, artifact store).
+  network:
+    services:
+      - name: fabrication-prep
+        port: 8000
+        ingress: [cloudflare-tunnel]
+        egress: [dns, postgres, https]
+  dependencies:
+    - platform: janua
+      reason: identity — RS256 service tokens (audience fabrication-prep-api, scope fabrication-prep:slice), JWKS
+    - platform: enclii
+      reason: deploy, Postgres and runtime role with generated passwords, generated keys, bucket credentials
+---
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: fabrication-prep-worker
+  project: fabrication-prep
+  description: fabrication-prep worker — claims slice jobs and runs the OrcaSlicer CLI
+spec:
+  build:
+    type: dockerfile
+    dockerfile: Dockerfile.worker
+    context: .
+    source:
+      git:
+        repository: https://github.com/madfam-org/fabrication-prep
+        branch: main
+        autoDeploy: false
+  runtime:
+    replicas: 1
+    resources:
+      requests: { cpu: "500m", memory: "1Gi" }
+      limits: { cpu: "2000m", memory: "3Gi" }
+  network:
+    services:
+      - name: fabrication-prep-worker
+        ingress: []
+        egress: [dns, postgres, https]
+  dependencies:
+    - platform: yantra4d
+      reason: render bundles (geometry + GOC-1 variables.json) fetched over HTTPS from allow-listed hosts
+---
+apiVersion: enclii.dev/v1
+kind: Service
+metadata:
+  name: fabrication-prep-web
+  project: fabrication-prep
+  description: fabrication-prep landing — static page (Caddy, non-root)
+spec:
+  status:
+    enabled: true
+    entries:
+      - name: fabrication-prep (landing)
+        url: https://fabrication-prep.madfam.io/health
+        href: https://fabrication-prep.madfam.io
+        group: Platform
+        family: MADFAM Platform
+        description: Slicing service — landing page
+  build:
+    type: dockerfile
+    dockerfile: web/Dockerfile
+    context: .
+    source:
+      git:
+        repository: https://github.com/madfam-org/fabrication-prep
+        branch: main
+        autoDeploy: false
+  runtime:
+    port: 8080
+    replicas: 1
+    resources:
+      requests: { cpu: "10m", memory: "32Mi" }
+      limits: { cpu: "200m", memory: "64Mi" }
+    healthCheck: /health
+    healthCheckTimeoutSeconds: 3
+  domains:
+    - name: fabrication-prep.madfam.io
+      environment: production
+      tlsEnabled: true
+  slo:
+    availability: 99.5
+    latencyP99Ms: 500
+  network:
+    services:
+      - name: fabrication-prep-web
+        port: 8080
+        ingress: [cloudflare-tunnel]
+        egress: [dns]

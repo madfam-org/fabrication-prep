@@ -1,0 +1,64 @@
+# fabrication-prep worker image: the service package plus the OrcaSlicer CLI (AGPL-3.0, official Linux
+# release). Stages:
+#   build   — the service virtualenv (pip lives only here);
+#   orca    — download the official AppImage, verify its sha256 (GitHub release digest), extract it
+#             (--appimage-extract needs no FUSE), so nothing at runtime mounts or self-extracts;
+#   runtime — Python base + the shared libraries the slicer links against + /opt/orcaslicer + the venv.
+# The version and digest are pinned together with the profiles (catalog.json "orcaslicer.version"); the worker
+# refuses to start when the CLI reports another version. CI smoke: `fabrication-prep selftest-slice` for both
+# targets under the pod's restrictions (non-root, read-only root, no capabilities).
+
+ARG PYTHON_IMAGE=python:3.13-slim
+
+FROM ${PYTHON_IMAGE} AS build
+ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /src
+RUN python -m venv /opt/venv
+COPY pyproject.toml README.md LICENSE ./
+COPY fabrication_prep ./fabrication_prep
+RUN /opt/venv/bin/python -m pip install --no-cache-dir . \
+ && /opt/venv/bin/python -m compileall -q /opt/venv/lib \
+ && /opt/venv/bin/python -m pip uninstall --yes pip \
+ && rm -f /opt/venv/bin/pip /opt/venv/bin/pip3 /opt/venv/bin/pip3.13
+
+FROM ${PYTHON_IMAGE} AS orca
+ARG ORCASLICER_VERSION=2.4.2
+ARG ORCASLICER_APPIMAGE_SHA256=d12fb8c8eac1aecd2dfb6377acd48f994f8fa439ed5292fa532dd82880f029fd
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt
+RUN curl -fsSL --retry 3 -o orca.AppImage \
+      "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v${ORCASLICER_VERSION}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V${ORCASLICER_VERSION}.AppImage" \
+ && echo "${ORCASLICER_APPIMAGE_SHA256}  orca.AppImage" | sha256sum -c - \
+ && chmod +x orca.AppImage && ./orca.AppImage --appimage-extract > /dev/null \
+ && mv squashfs-root /opt/orcaslicer && rm orca.AppImage \
+ && test -x /opt/orcaslicer/AppRun
+
+FROM ${PYTHON_IMAGE} AS runtime
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH=/opt/venv/bin:$PATH FABRICATION_PREP_ENV=production \
+    ORCASLICER_BIN=/opt/orcaslicer/AppRun
+# Shared libraries the OrcaSlicer binary links against that the AppImage does not bundle (GL, GTK 3,
+# WebKitGTK 4.1, GStreamer, libsecret, X11 session management, libmspack). The ldd report below lists
+# anything still missing in the build log; the first Linux CI build found libSM, libICE and libmspack.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libgl1 libegl1 libglu1-mesa libgtk-3-0t64 libwebkit2gtk-4.1-0 libgstreamer1.0-0 \
+      libgstreamer-plugins-base1.0-0 libsecret-1-0 libfontconfig1 libsm6 libice6 libmspack0t64 \
+ && rm -rf /var/lib/apt/lists/* \
+ && /usr/local/bin/python3 -m pip uninstall --yes pip \
+ && rm -rf /usr/local/lib/python3.13/ensurepip /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.13 \
+ && groupadd -g 1001 app && useradd -u 1001 -g 1001 -M -d /nonexistent -s /usr/sbin/nologin app
+COPY --from=orca /opt/orcaslicer /opt/orcaslicer
+COPY --from=build /opt/venv /opt/venv
+RUN echo "--- unresolved shared libraries of the slicer (should be empty) ---" \
+ && for f in $(find /opt/orcaslicer -maxdepth 3 -type f -name 'orca-slicer*' -perm -u+x); do \
+      LD_LIBRARY_PATH=/opt/orcaslicer/lib:/opt/orcaslicer/usr/lib ldd "$f" | grep "not found" || true; done \
+ && echo "--- surviving pip artifacts (must be empty) ---" \
+ && ! find / -xdev \( -type d -name 'pip-*.dist-info' -o -type d -path '*/pip/_vendor' \
+      -o -type f -name 'pip-*.whl' \) -print | grep . \
+ && ! /opt/venv/bin/python -c "import pip" 2>/dev/null \
+ && /opt/venv/bin/python -c "import fabrication_prep.worker" \
+ && /opt/venv/bin/fabrication-prep check-profiles \
+ && /opt/orcaslicer/AppRun --help | head -1 | grep -qx "OrcaSlicer-2.4.2:"
+USER 1001
+WORKDIR /var/lib/fabrication-prep/work
+CMD ["fabrication-prep", "worker"]

@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fabrication-prep-worker
+  namespace: fabrication-prep
+  labels:
+    app.kubernetes.io/name: fabrication-prep-worker
+    app.kubernetes.io/part-of: fabrication-prep
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  # One job per worker process; scale replicas for throughput. SKIP LOCKED keeps replicas off each other's jobs.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fabrication-prep-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fabrication-prep-worker
+        app.kubernetes.io/part-of: fabrication-prep
+        app: fabrication-prep-worker
+        enclii.dev/service: fabrication-prep-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      # Let a slice in progress finish or hand back its lease (the worker stops on SIGTERM between jobs; an
+      # interrupted job's lease expires and another worker retries it).
+      terminationGracePeriodSeconds: 60
+      imagePullSecrets:
+        - name: ghcr-credentials
+      containers:
+        - name: worker
+          image: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-worker
+          command: ["fabrication-prep", "worker"]
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: FABRICATION_PREP_ENV
+              value: production
+            - name: ARTIFACT_BACKEND
+              value: s3
+            - name: ORCASLICER_BIN
+              value: /opt/orcaslicer/AppRun
+            - name: WORKER_WORKDIR
+              value: /var/lib/fabrication-prep/work
+            - name: WORKER_HEARTBEAT_FILE
+              value: /var/lib/fabrication-prep/work/worker-heartbeat
+            - name: SLICE_TIMEOUT_SECONDS
+              value: "900"
+            - name: WORKER_LEASE_SECONDS
+              value: "120"
+            - name: JOB_MAX_ATTEMPTS
+              value: "3"
+            - name: DB_POOL_MIN
+              value: "1"
+            - name: DB_POOL_MAX
+              value: "2"
+            - name: LOG_LEVEL
+              value: INFO
+            - name: APP_DATABASE_URL
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: APP_DATABASE_URL } }
+            # Not a secret: the public hosts render bundles are fetched from (yantra4d's API).
+            - name: INPUT_ALLOWED_HOSTS
+              value: api.yantra4d.com
+            # Object-store credentials as `enclii buckets create` writes them (R2_* keys, bucket-scoped
+            # token, never printed); the service keeps its own S3_* names.
+            - name: S3_ENDPOINT_URL
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_ENDPOINT_URL } }
+            - name: S3_BUCKET
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_BUCKET_NAME } }
+            - name: S3_ACCESS_KEY_ID
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_ACCESS_KEY_ID } }
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: fabrication-prep-credentials, key: R2_SECRET_ACCESS_KEY } }
+          volumeMounts:
+            - name: work
+              mountPath: /var/lib/fabrication-prep/work
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { cpu: "2", memory: 3Gi }
+          # The worker has no HTTP port: probes read its heartbeat file (touched every poll and lease renewal).
+          livenessProbe:
+            exec: { command: ["fabrication-prep", "worker-health", "--max-age", "300"] }
+            initialDelaySeconds: 60
+            periodSeconds: 60
+          readinessProbe:
+            exec: { command: ["fabrication-prep", "worker-health", "--max-age", "120"] }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: work
+          emptyDir:
+            sizeLimit: 4Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

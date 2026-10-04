@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: fabrication-prep
+
+resources:
+- api-deployment.yaml
+- worker-deployment.yaml
+- web-deployment.yaml
+- services.yaml
+- network-policies.yaml
+
+# Image digests. The all-zero digests are PLACEHOLDERS: they never resolve, so nothing can run before a real,
+# signed build is pinned here (by the shared build-and-publish workflow, once the owner adds it). Kyverno:
+# ghcr.io/madfam-org only, digest-pinned, no :latest.
+images:
+- name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-api
+  newName: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-api
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+- name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-worker
+  newName: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-worker
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+- name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-web
+  newName: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-web
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

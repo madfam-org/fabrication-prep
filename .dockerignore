@@ -1,0 +1,17 @@
+.git
+.github
+tests
+infra
+scripts
+web
+docs
+.venv
+.dev-keys
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+*.dmg
+*.AppImage
+squashfs-root

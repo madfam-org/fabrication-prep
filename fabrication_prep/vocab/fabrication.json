@@ -1,0 +1,276 @@
+{
+ "source": {
+  "repository": "https://github.com/madfam-org/hyperobjects-spec",
+  "commit": "4379fa3efdab077edbf7f17a73dbb2aced996705",
+  "licence": "Apache-2.0",
+  "files": {
+   "process-parameters": {
+    "path": "src/hyperobjects_lexicon/vocabularies/fabrication/process-parameters.json",
+    "blob": "b8e46603e3eb089ae08d780006733767e8c96b76"
+   },
+   "material-classes": {
+    "path": "src/hyperobjects_lexicon/vocabularies/fabrication/material-classes.json",
+    "blob": "22e2b7dec662f432079d2a7f59bd968e677f8d37"
+   },
+   "processes": {
+    "path": "src/hyperobjects_lexicon/vocabularies/fabrication/processes.json",
+    "blob": "7ee0c013641b42aaed03bd4e3bf84bb77efffc1c"
+   }
+  }
+ },
+ "process_parameters": {
+  "wall_loops": {
+   "unit": "count",
+   "value_type": "integer",
+   "preset": "print",
+   "option_type": "coInt",
+   "orcaslicer_key": "wall_loops"
+  },
+  "top_shell_layers": {
+   "unit": "count",
+   "value_type": "integer",
+   "preset": "print",
+   "option_type": "coInt",
+   "orcaslicer_key": "top_shell_layers"
+  },
+  "bottom_shell_layers": {
+   "unit": "count",
+   "value_type": "integer",
+   "preset": "print",
+   "option_type": "coInt",
+   "orcaslicer_key": "bottom_shell_layers"
+  },
+  "sparse_infill_density": {
+   "unit": "percent",
+   "value_type": "number",
+   "preset": "print",
+   "option_type": "coPercent",
+   "orcaslicer_key": "sparse_infill_density"
+  },
+  "sparse_infill_pattern": {
+   "unit": "none",
+   "value_type": "string",
+   "preset": "print",
+   "option_type": "coEnum",
+   "orcaslicer_key": "sparse_infill_pattern"
+  },
+  "layer_height": {
+   "unit": "mm",
+   "value_type": "number",
+   "preset": "print",
+   "option_type": "coFloat",
+   "orcaslicer_key": "layer_height"
+  },
+  "initial_layer_print_height": {
+   "unit": "mm",
+   "value_type": "number",
+   "preset": "print",
+   "option_type": "coFloat",
+   "orcaslicer_key": "initial_layer_print_height"
+  },
+  "nozzle_diameter": {
+   "unit": "mm",
+   "value_type": "number",
+   "preset": "printer",
+   "option_type": "coFloats",
+   "orcaslicer_key": "nozzle_diameter"
+  },
+  "outer_wall_speed": {
+   "unit": "mm/s",
+   "value_type": "number",
+   "preset": "print",
+   "option_type": "coFloats",
+   "orcaslicer_key": "outer_wall_speed"
+  },
+  "default_jerk": {
+   "unit": "mm/s",
+   "value_type": "number",
+   "preset": "print",
+   "option_type": "coFloats",
+   "orcaslicer_key": "default_jerk"
+  },
+  "nozzle_temperature": {
+   "unit": "degC",
+   "value_type": "integer",
+   "preset": "filament",
+   "option_type": "coInts",
+   "orcaslicer_key": "nozzle_temperature"
+  },
+  "bed_temperature": {
+   "unit": "degC",
+   "value_type": "integer",
+   "preset": "placeholder",
+   "option_type": "coInts",
+   "orcaslicer_key": "bed_temperature"
+  },
+  "hot_plate_temp": {
+   "unit": "degC",
+   "value_type": "integer",
+   "preset": "filament",
+   "option_type": "coInts",
+   "orcaslicer_key": "hot_plate_temp"
+  },
+  "textured_plate_temp": {
+   "unit": "degC",
+   "value_type": "integer",
+   "preset": "filament",
+   "option_type": "coInts",
+   "orcaslicer_key": "textured_plate_temp"
+  },
+  "cool_plate_temp": {
+   "unit": "degC",
+   "value_type": "integer",
+   "preset": "filament",
+   "option_type": "coInts",
+   "orcaslicer_key": "cool_plate_temp"
+  },
+  "eng_plate_temp": {
+   "unit": "degC",
+   "value_type": "integer",
+   "preset": "filament",
+   "option_type": "coInts",
+   "orcaslicer_key": "eng_plate_temp"
+  },
+  "enable_support": {
+   "unit": "none",
+   "value_type": "boolean",
+   "preset": "print",
+   "option_type": "coBool",
+   "orcaslicer_key": "enable_support"
+  }
+ },
+ "material_classes": {
+  "pla": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "petg": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "abs": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "abs-gf": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "asa": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "pc": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "tpu-95a": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "tpu-85a": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "peba": {
+   "kind": "powder",
+   "processes": [
+    "sls"
+   ]
+  },
+  "pa12": {
+   "kind": "powder",
+   "processes": [
+    "sls",
+    "mjf"
+   ]
+  },
+  "pa12-cf": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "pa-cf": {
+   "kind": "filament",
+   "processes": [
+    "fff"
+   ]
+  },
+  "photopolymer-standard": {
+   "kind": "resin",
+   "processes": [
+    "sla"
+   ]
+  },
+  "photopolymer-tough": {
+   "kind": "resin",
+   "processes": [
+    "sla"
+   ]
+  },
+  "carbon-fiber-plate": {
+   "kind": "sheet",
+   "processes": [
+    "cnc_3axis",
+    "cnc_router"
+   ]
+  },
+  "aluminium-6061": {
+   "kind": "sheet",
+   "processes": [
+    "cnc_3axis",
+    "cnc_router"
+   ]
+  },
+  "woven": {
+   "kind": "fabric",
+   "processes": []
+  },
+  "knit": {
+   "kind": "fabric",
+   "processes": []
+  },
+  "nonwoven": {
+   "kind": "fabric",
+   "processes": []
+  },
+  "leather": {
+   "kind": "fabric",
+   "processes": []
+  },
+  "technical": {
+   "kind": "fabric",
+   "processes": []
+  },
+  "printed_textile": {
+   "kind": "fabric",
+   "processes": []
+  }
+ },
+ "processes": [
+  "cnc_3axis",
+  "cnc_router",
+  "fff",
+  "laser_2d",
+  "mjf",
+  "sla",
+  "sls"
+ ]
+}

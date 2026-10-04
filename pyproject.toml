@@ -1,0 +1,79 @@
+[project]
+name = "fabrication-prep"
+version = "0.1.0"
+description = "fabrication-prep — MADFAM's slicing service: GOC-1 render bundles to printer-ready output with OrcaSlicer and versioned profiles"
+readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+classifiers = [
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Programming Language :: Python :: 3.13",
+  "Framework :: FastAPI",
+]
+requires-python = ">=3.13,<3.14"
+# Runtime dependencies; every licence is AGPL-3.0-compatible (scripts/check-licenses.sh enforces it in CI).
+# SQLAlchemy arrives only through Alembic and is used with an explicit postgresql+psycopg URL.
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "psycopg[binary,pool]>=3.2,<4",
+  "alembic>=1.14,<2",
+  "pyjwt[crypto]>=2.10,<3",
+  "httpx>=0.28,<1",
+  "boto3>=1.35,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=6",
+  "ruff>=0.9",
+  "jsonschema>=4.23,<5",
+  "moto[s3]>=5,<6",
+  "pip-licenses>=5",
+  "pyyaml>=6",
+]
+
+[project.scripts]
+fabrication-prep = "fabrication_prep.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fabrication_prep"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "BLE"]
+ignore = [
+  "S101",  # assert is the pytest idiom; production code does not use it for control flow
+]
+
+[tool.ruff.lint.per-file-ignores]
+"fabrication_prep/api.py" = ["B008"]  # FastAPI Depends()/Query()/Header() in defaults is the framework idiom
+"tests/*" = ["S105", "S106", "S108", "S311", "S603", "S607", "BLE001"]
+"scripts/*" = ["S603", "S607"]
+"fabrication_prep/migrations/*" = ["S608"]
+"fabrication_prep/queue.py" = ["S608"]  # interpolates only the constant JOB_COLUMNS list; values are bound parameters
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+  "orcaslicer: runs the real OrcaSlicer CLI (needs ORCASLICER_BIN); local proof, not run in CI",
+]
+
+[tool.coverage.run]
+source = ["fabrication_prep"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

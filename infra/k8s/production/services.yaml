@@ -1,0 +1,32 @@
+# Service names are the enclii SERVICE names on port 80 (onboard convention): the tunnel routes
+# fabrication-prep-api.madfam.io -> fabrication-prep:80 and fabrication-prep.madfam.io -> fabrication-prep-web:80.
+# The worker has no Service: nothing connects to it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabrication-prep
+  namespace: fabrication-prep
+  labels:
+    app: fabrication-prep
+spec:
+  selector:
+    app.kubernetes.io/name: fabrication-prep-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fabrication-prep-web
+  namespace: fabrication-prep
+  labels:
+    app: fabrication-prep-web
+spec:
+  selector:
+    app.kubernetes.io/name: fabrication-prep-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
