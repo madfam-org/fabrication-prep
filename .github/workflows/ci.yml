@@ -102,7 +102,9 @@ jobs:
           docker run --rm $H fabrication-prep-api:ci fabrication-prep check-profiles
       - name: Worker image slices for both targets (OrcaSlicer Linux CLI, headless, read-only root)
         run: |
-          H="--user 1001 --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp --tmpfs /var/lib/fabrication-prep/work"
+          # The work dir is an emptyDir with fsGroup 1001 in the pod; a plain --tmpfs is root-owned, so mount it
+          # for uid/gid 1001 to mirror the pod (the root filesystem stays read-only).
+          H="--user 1001 --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp --tmpfs /var/lib/fabrication-prep/work:uid=1001,gid=1001,mode=0750"
           docker run --rm $H fabrication-prep-worker:ci sh -c '! python -c "import pip" 2>/dev/null' && echo "no pip in the worker image"
           for target in klipper_gcode bambu_3mf; do
             docker run --rm $H fabrication-prep-worker:ci \
