@@ -1,0 +1,76 @@
+name: Build & Deploy
+
+# Caller for Enclii's shared reusable workflow (three services: fabrication-prep-api, fabrication-prep-worker and
+# fabrication-prep-web): buildx, push to GHCR as :${SHA}, keyless cosign sign and verify, then the kustomize digest
+# pin committed to main, which the GitOps sync picks up once the project is onboarded (docs/operator-setup.md).
+#
+# Image names are the contract: image_prefix plus the service name gives
+# ghcr.io/madfam-org/fabrication-prep/fabrication-prep-{api,worker,web}, the exact `images:` entries in
+# infra/k8s/production/kustomization.yaml (scripts/check_manifests.py and tests/test_manifests.py keep them in step).
+# The worker image is about 0.5 GB larger than the API image: it carries the OrcaSlicer Linux release.
+#
+# The ref is a full commit SHA, the peeled commit of enclii tag v1.0.0-alpha.14, so what runs cannot change under
+# us; the reusable workflow's pin job trusts a SHA caller when the SHA is on enclii main or is a v* tag commit.
+# To bump: take a release tag's peeled commit (`git ls-remote https://github.com/madfam-org/enclii
+# 'refs/tags/vX.Y.Z^{}'`), read the diff of .github/workflows/build-publish.yml from the current SHA to it, re-check
+# the named secrets below against its `on.workflow_call.secrets`, then change the SHA and its comment together.
+#
+# DISPATCH ONLY. Deploys are manual until promotion is ruled (enclii.yaml keeps `autoDeploy: false`): merging to
+# main builds nothing. Push-on-main (with `paths-ignore: ['**.md', 'docs/**']`) is switched on in its own pull
+# request when the owner rules on promotion. A dispatch before onboarding only builds and pins images nobody runs.
+on:
+  workflow_dispatch:
+    inputs:
+      # The reusable workflow reads this from the dispatch event and builds exactly these services, skipping change
+      # detection (a dispatch has no push "before" SHA, so detection could silently build nothing).
+      services:
+        description: Comma-separated services to build
+        required: false
+        default: fabrication-prep-api,fabrication-prep-worker,fabrication-prep-web
+
+concurrency:
+  group: fabrication-prep-production-kustomization
+  cancel-in-progress: false
+
+# Read-only unless a job widens it; only the build-publish call does.
+permissions:
+  contents: read
+
+jobs:
+  build-publish:
+    uses: madfam-org/enclii/.github/workflows/build-publish.yml@c0e44a8c373fdf632a0115b145fdb810313fd387 # v1.0.0-alpha.14
+    with:
+      image_prefix: ghcr.io/madfam-org/fabrication-prep
+      kustomization_path: infra/k8s/production
+      # Public repository: GitHub-hosted builders only (the default routes to MADFAM's self-hosted pool, which must
+      # never run a public repository's code).
+      build_runner: ubuntu-24.04
+      # `paths` are directories plus exact files (they matter once push-on-main is switched on).
+      services: |
+        [
+          {"name":"fabrication-prep-api", "dockerfile":"Dockerfile", "paths":"fabrication_prep pyproject.toml README.md LICENSE Dockerfile .dockerignore"},
+          {"name":"fabrication-prep-worker", "dockerfile":"Dockerfile.worker", "paths":"fabrication_prep pyproject.toml README.md LICENSE Dockerfile.worker .dockerignore"},
+          {"name":"fabrication-prep-web", "dockerfile":"web/Dockerfile", "paths":"web"}
+        ]
+    # Named secrets only, never `inherit`: the reusable workflow sees exactly what is listed here. A public repository
+    # sees only the org secrets DOCKER_USERNAME, DOCKER_TOKEN and MADFAM_BOT_PAT, plus its own repository secrets
+    # (it has none). build-publish.yml declares 8 optional secrets; per secret:
+    #   DOCKER_USERNAME, DOCKER_TOKEN  passed (org secrets). Docker Hub login only lifts anonymous pull rate limits for
+    #       the base images; soft-fails when absent.
+    #   ENCLII_CALLBACK_TOKEN  not passed. It is not visible to a public repository and nobody types it into one; the
+    #       lifecycle step warns and skips. Replicas come from this repository's own Deployments (replicas: 1), which
+    #       the GitOps sync applies.
+    #   GHCR_PAT  not passed. GHCR push, pull and verify use github.token (`packages: write` below).
+    #   ENCLII_COMMIT_TOKEN  not passed. The digest-pin commit uses github.token (`contents: write`); main has no
+    #       branch protection that blocks it. If that changes, pass MADFAM_BOT_PAT here and record why.
+    #   ENCLII_DEPLOY_TOKEN, ENCLII_API_URL  not passed (legacy callback name; the endpoint has a default).
+    #   NPM_MADFAM_TOKEN  not passed. Nothing here installs from npm.madfam.io.
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+    # `contents: write` for the digest-pin commit to main, `packages: write` to push to GHCR, `id-token: write` for
+    # keyless cosign signing and for the pin job to read its own job_workflow_ref claim.
+    permissions:
+      contents: write
+      packages: write
+      id-token: write

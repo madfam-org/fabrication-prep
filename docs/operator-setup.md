@@ -38,6 +38,7 @@ One command. Switchyard creates everything and generates every value server-side
 enclii onboard --repo madfam-org/fabrication-prep --project fabrication-prep \
   --manifest-path infra/k8s/production --preflight \
   --db-name fabrication_prep --generate-db-password \
+  --db-connection-limit 2 \
   --app-role fabrication_prep_app --app-role-connection-limit 8 \
   --generate-secret ARTIFACT_URL_KEYS
 ```
@@ -59,7 +60,8 @@ the roles and key names that would be generated, never values. Re-runs and repai
 `enclii onboard ensure` with the same flags; it keeps every existing role and value, and only a `--rotate-*`
 flag replaces one. The command exits non-zero when any step did not complete.
 
-`CONNECTION LIMIT 8` covers the API pool (3), the worker pool (2) and headroom for a second worker replica.
+`CONNECTION LIMIT 8` covers the API pool (3), the worker pool (2) and headroom for a second worker replica. The
+owner role is used only by the one-connection migrate init container, so `--db-connection-limit 2` caps it.
 Raise it deliberately with the replica count (`enclii onboard ensure … --app-role fabrication_prep_app
 --app-role-connection-limit <n> --rotate-app-role-password`): the shared Postgres budget is 100 connections.
 
@@ -75,9 +77,15 @@ This creates the bucket and mints a Cloudflare token scoped to that one bucket (
 settings. Keep the bucket **private: no public access, no custom domain, no r2.dev URL**; bytes leave only
 through the API's signed URLs (ADR-014).
 
-Retention is an owner decision. Artifacts are content-addressed and referenced by jobs, so a lifecycle rule that
-expires objects after N days is safe once pravara has copied what the passport needs. v1 ships no garbage
-collector.
+### Artifact retention: 30 days
+
+`enclii buckets` has no lifecycle rule, so the worker enforces retention itself (`fabrication_prep/retention.py`):
+between jobs, at most once an hour, it deletes the bytes of artifacts that no job has produced for
+`ARTIFACT_RETENTION_DAYS` (30, set in the worker Deployment; 0 keeps everything) and marks their rows expired. Rows
+and digests stay. A job whose artifacts expired shows `artifacts_expired_at` and no URLs; the download route answers
+410. pravara copies the digests it needs when the slice succeeds and fetches the bytes only at dispatch, within
+hours, so 30 days is safe for the passport. The bucket token's Object Read & Write permission covers the delete;
+a refused delete is logged and retried, never silently skipped.
 
 ## 5. Non-secret configuration
 
@@ -85,24 +93,18 @@ collector.
 Deployments, not a Secret. Changing it is a manifest change in this repository. An empty list refuses every
 input.
 
-## 6. Build and deploy wiring (owner decision)
+## 6. Build and deploy
 
-This repository has no build-and-deploy workflow, on purpose. To enable deploys, add
-`.github/workflows/build-deploy.yml` calling the shared Enclii reusable workflow at a pinned tag, with three
-services:
+`.github/workflows/build-deploy.yml` calls Enclii's reusable workflow (pinned by commit SHA) for the three images,
+signs them and commits the digest pins to `infra/k8s/production/kustomization.yaml`; the GitOps sync then rolls
+them out. It runs **only when dispatched** while `autoDeploy` stays `false` (promotion not yet ruled):
 
-```yaml
-services: |
-  [
-    {"name":"fabrication-prep-api", "dockerfile":"Dockerfile", "paths":"fabrication_prep pyproject.toml Dockerfile"},
-    {"name":"fabrication-prep-worker", "dockerfile":"Dockerfile.worker", "paths":"fabrication_prep pyproject.toml Dockerfile.worker"},
-    {"name":"fabrication-prep-web", "dockerfile":"web/Dockerfile", "paths":"web"}
-  ]
+```bash
+gh workflow run build-deploy.yml --repo madfam-org/fabrication-prep
 ```
 
-The workflow builds, signs and pins the digests in `infra/k8s/production/kustomization.yaml`, replacing the
-all-zero placeholders; ArgoCD then syncs. The worker image is large, because OrcaSlicer is roughly 0.5 GB
-extracted. Flip `autoDeploy` in `enclii.yaml` only when promotion is ruled.
+The worker image is about 0.5 GB larger than the API image (OrcaSlicer). Push-on-main is a separate pull request
+once promotion is ruled.
 
 ## 7. Smoke after the first deploy
 
