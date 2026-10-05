@@ -71,6 +71,10 @@ def conflict(code: str, message: str) -> ApiError:
     return ApiError.one(409, code, message)
 
 
+def gone(code: str, message: str) -> ApiError:
+    return ApiError.one(410, code, message)
+
+
 def unprocessable(problems: list[Problem]) -> ApiError:
     return ApiError(422, problems)
 
