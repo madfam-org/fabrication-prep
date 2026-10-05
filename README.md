@@ -145,6 +145,7 @@ Configuration is environment-only (`fabrication_prep/settings.py` documents each
 
 ## Documents
 
+* `docs/STATUS.md` — where the service stands (as of 2026-10-05): what landed, open PRs in merge order, next steps.
 * `AGENTS.md` — rules for agents and contributors working in this repository.
 * `docs/operator-setup.md` — the owner's steps: push, Janua client, one `enclii onboard` (database, runtime role and
   generated keys), `enclii buckets create`, deploy wiring, smoke. No step handles a credential.
