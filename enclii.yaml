@@ -74,7 +74,7 @@ spec:
       - name: fabrication-prep
         port: 8000
         ingress: [cloudflare-tunnel]
-        egress: [dns, postgres, https]
+        egress: [dns, postgres, pgbouncer, https]
   dependencies:
     - platform: janua
       reason: identity — RS256 service tokens (audience fabrication-prep-api, scope fabrication-prep:slice), JWKS
@@ -106,7 +106,7 @@ spec:
     services:
       - name: fabrication-prep-worker
         ingress: []
-        egress: [dns, postgres, https]
+        egress: [dns, postgres, pgbouncer, https]
   dependencies:
     - platform: yantra4d
       reason: render bundles (geometry + GOC-1 variables.json) fetched over HTTPS from allow-listed hosts
