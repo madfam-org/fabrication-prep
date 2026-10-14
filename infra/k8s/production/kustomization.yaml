@@ -7,7 +7,6 @@ resources:
 - worker-deployment.yaml
 - web-deployment.yaml
 - services.yaml
-- network-policies.yaml
 
 # Image digests. The all-zero digests are PLACEHOLDERS: they never resolve, so nothing can run before a real,
 # signed build is pinned here (by the shared build-and-publish workflow, once the owner adds it). Kyverno:

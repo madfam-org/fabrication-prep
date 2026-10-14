@@ -37,6 +37,23 @@ def test_overlay_passes_the_rules():
     assert check_manifests.check(render()) == []
 
 
+def test_enclii_network_rules():
+    """Enclii generates the NetworkPolicies from enclii.yaml `network:`; the tunnel and worker rules live there."""
+    docs = [d for d in yaml.safe_load_all((ROOT / "enclii.yaml").read_text()) if d]
+    assert check_manifests.check_enclii(docs) == []
+    nets = {n["name"]: n for d in docs for n in (d.get("spec", {}).get("network") or {}).get("services", [])}
+    for backend in ("fabrication-prep", "fabrication-prep-worker"):
+        assert {"postgres", "pgbouncer", "https"} <= set(nets[backend]["egress"])  # data + pooler + 443
+    assert nets["fabrication-prep-worker"]["ingress"] == []
+    mutated = copy.deepcopy(docs)
+    for d in mutated:
+        for n in (d.get("spec", {}).get("network") or {}).get("services", []):
+            if n["name"] == "fabrication-prep-worker":
+                n["ingress"] = ["cloudflare-tunnel"]
+    errors = check_manifests.check_enclii(mutated)
+    assert any("tunnel" in e for e in errors) and any("worker" in e for e in errors)
+
+
 def test_enclii_manifest_names_the_ruled_domains():
     docs = list(yaml.safe_load_all((ROOT / "enclii.yaml").read_text()))
     domains = {d["name"] for doc in docs for d in doc.get("spec", {}).get("domains", [])}
@@ -96,6 +113,8 @@ def test_rules_catch_violations(path, value):
 def test_rules_catch_forbidden_objects_and_a_worker_service():
     docs = render()
     assert check_manifests.check(docs + [{"kind": "Secret", "metadata": {"name": "x"}}])
+    policy = {"kind": "NetworkPolicy", "metadata": {"name": "y"}}
+    assert any("NetworkPolicy" in e for e in check_manifests.check(docs + [policy]))
     svc = {
         "kind": "Service",
         "metadata": {"name": "w"},
