@@ -12,12 +12,12 @@ resources:
 # signed build is pinned here (by the shared build-and-publish workflow, once the owner adds it). Kyverno:
 # ghcr.io/madfam-org only, digest-pinned, no :latest.
 images:
-- name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-api
+- digest: sha256:a4f98bb83c8eca5df83ebd43f6f0bcf7328111685f63208a66611f6fc172b513
+  name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-api
   newName: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-api
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-- name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-worker
-  newName: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-worker
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
-- name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-web
+- digest: sha256:a40fdbbf618d976ad15b64e77eeb86a5bfb885f041c446443172ffa02c709ab4
+  name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-web
   newName: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-web
-  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+- digest: sha256:60e4436ce7ded4b9c0d024c6164a7430d0dc242155fb415a16d7951c233a6c28
+  name: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-worker
+  newName: ghcr.io/madfam-org/fabrication-prep/fabrication-prep-worker
