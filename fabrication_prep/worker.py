@@ -1,9 +1,10 @@
 """The slice worker: claim a job, fetch the bundle, slice with the pinned profiles, store, finish.
 
-One job at a time per process (slicing is CPU-bound; scale with replicas). The lease is renewed by a
-background thread while the slicer runs; if renewal fails, the slicer is killed and the result discarded.
-At startup the worker checks that the CLI reports the OrcaSlicer version the profiles were built for and
-refuses to start otherwise — profiles are pinned to a slicer version.
+One job at a time per process (slicing is CPU-bound; scale with replicas). Between jobs the worker also runs the
+artifact retention sweep (``fabrication_prep.retention``) at most once per ``ARTIFACT_GC_INTERVAL_SECONDS``.
+The lease is renewed by a background thread while the slicer runs; if renewal fails, the slicer is killed and
+the result discarded. At startup the worker checks that the CLI reports the OrcaSlicer version the profiles were
+built for and refuses to start otherwise — profiles are pinned to a slicer version.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from .canonical import canonical_json, sha256_hex
 from .effective import apply_overrides, effective_values
 from .inputs import InputError, fetch_bundle
 from .profiles import Catalog, ProfileIntegrityError
+from .retention import RetentionSchedule
 from .settings import Settings
 from .slicer import Runner, SlicerError, run_slicer, subprocess_runner
 from .slicer_variables import build as build_variables
@@ -59,6 +61,9 @@ class Worker:
         self.http = http or httpx.Client(timeout=settings.input_timeout_seconds)
         self.runner = runner
         self.worker_id = worker_id or f"{socket.gethostname()}:{uuid.uuid4().hex[:8]}"
+        self.retention = RetentionSchedule(
+            store, settings.artifact_retention_days, settings.artifact_gc_batch, settings.artifact_gc_interval_seconds
+        )
         self._stop = threading.Event()
 
     def stop(self, *_args) -> None:
@@ -76,7 +81,10 @@ class Worker:
         log.info("worker started", extra={"worker": self.worker_id})
         while not self._stop.is_set():
             self.heartbeat()
-            if not self.run_once():
+            busy = self.run_once()
+            # Between jobs, at most once per ARTIFACT_GC_INTERVAL_SECONDS (fabrication_prep.retention).
+            self.retention.maybe_run()
+            if not busy:
                 self._stop.wait(self.s.worker_poll_seconds)
         log.info("worker stopped", extra={"worker": self.worker_id})
 
@@ -184,8 +192,7 @@ class Worker:
             raise PermanentJobError("requirements_not_met", "; ".join(p.message for p in problems))
         output_sha = file_sha256(out.path)
         output_size = out.path.stat().st_size
-        self.store.put_file(out.path, output_sha, out.media_type)
-        queue.record_artifact(output_sha, out.media_type, output_size, out.filename)
+        queue.store_artifact(self.store, out.path, output_sha, out.media_type, out.filename)
         output = {
             "sha256": output_sha,
             "media_type": out.media_type,
@@ -209,8 +216,7 @@ class Worker:
         doc_path = workdir / "slicer-variables.json"
         doc_path.write_bytes(canonical_json(doc))
         doc_sha = file_sha256(doc_path)
-        self.store.put_file(doc_path, doc_sha, "application/json")
-        queue.record_artifact(doc_sha, "application/json", doc_path.stat().st_size, "slicer-variables.json")
+        queue.store_artifact(self.store, doc_path, doc_sha, "application/json", "slicer-variables.json")
         summary = {
             "estimates": out.estimates,
             "effective_sha256": doc["effective_sha256"],

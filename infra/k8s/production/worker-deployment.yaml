@@ -62,6 +62,9 @@ spec:
               value: "120"
             - name: JOB_MAX_ATTEMPTS
               value: "3"
+            # Retention sweep (fabrication_prep.retention): delete the bytes of artifacts no job produced for 30 days.
+            - name: ARTIFACT_RETENTION_DAYS
+              value: "30"
             - name: DB_POOL_MIN
               value: "1"
             - name: DB_POOL_MAX

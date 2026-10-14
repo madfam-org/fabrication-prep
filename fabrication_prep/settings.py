@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     # ARTIFACT_URL_KEYS`, unpadded base64url); its kid is derived from the key's sha256.
     artifact_url_keys: str = Field("", json_schema_extra={"source": "secret"})
     artifact_url_ttl_seconds: int = Field(900, json_schema_extra={"source": "env"})
+    # Retention (fabrication_prep.retention): the worker deletes the bytes of artifacts no job has produced for this
+    # many days; rows and digests stay. 0 disables the sweep (bytes are kept forever). Default 30 days (programme
+    # decision of 2026-10-05; docs/operator-setup.md, "Artifact retention").
+    artifact_retention_days: int = Field(30, json_schema_extra={"source": "env"})
+    artifact_gc_interval_seconds: int = Field(3600, json_schema_extra={"source": "env"})
+    artifact_gc_batch: int = Field(100, json_schema_extra={"source": "env"})
     public_base_url: str = Field("https://fabrication-prep-api.madfam.io", json_schema_extra={"source": "env"})
 
     # Input fetching (render bundles): only these hosts, HTTPS outside local/test, bounded size and time.
@@ -130,6 +136,12 @@ class Settings(BaseSettings):
             raise RuntimeError("ARTIFACT_BACKEND must be 'fs' or 's3'")
         if not 60 <= self.artifact_url_ttl_seconds <= 3600:
             raise RuntimeError("ARTIFACT_URL_TTL_SECONDS must be between 60 and 3600 (short-lived URLs)")
+        if not 0 <= self.artifact_retention_days <= 3650:
+            raise RuntimeError("ARTIFACT_RETENTION_DAYS must be between 0 (keep forever) and 3650")
+        if not 60 <= self.artifact_gc_interval_seconds <= 86400:
+            raise RuntimeError("ARTIFACT_GC_INTERVAL_SECONDS must be between 60 and 86400")
+        if not 1 <= self.artifact_gc_batch <= 1000:
+            raise RuntimeError("ARTIFACT_GC_BATCH must be between 1 and 1000")
         if not self.is_local and not self.public_base_url.startswith("https://"):
             raise RuntimeError("PUBLIC_BASE_URL must be https outside local/test")
         if self.worker_lease_seconds < 30:

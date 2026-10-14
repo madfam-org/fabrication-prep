@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import json
 import uuid
+from pathlib import Path
 from typing import Any
 
 from psycopg.types.json import Jsonb
 
 from . import db
+from .artifacts import ArtifactStore
 
 # The only text interpolated into SQL in this module is this constant column list (S608 is waived for this
 # file in pyproject.toml for that reason; every value travels as a bound parameter).
@@ -83,8 +85,12 @@ def get_job(owner: str, job_id: uuid.UUID) -> dict | None:
 
 
 def get_artifact(sha256: str) -> dict | None:
+    """The artifact's metadata. ``expired_at`` is set once the retention sweep has deleted its bytes."""
     with db.transaction() as cur:
-        cur.execute("SELECT sha256, media_type, bytes, filename FROM artifacts WHERE sha256 = %s", (sha256,))
+        cur.execute(
+            "SELECT sha256, media_type, bytes, filename, last_used_at, expired_at FROM artifacts WHERE sha256 = %s",
+            (sha256,),
+        )
         return cur.fetchone()
 
 
@@ -148,13 +154,21 @@ def renew_lease(job_id: uuid.UUID, worker_id: str, lease_seconds: int) -> bool:
         return cur.rowcount == 1
 
 
-def record_artifact(sha256: str, media_type: str, size: int, filename: str) -> None:
+def store_artifact(store: ArtifactStore, path: Path, sha256: str, media_type: str, filename: str) -> None:
+    """Record the artifact and make sure its bytes are stored, as one unit against the retention sweep.
+
+    The row is upserted first: ``last_used_at`` moves to now and ``expired_at`` is cleared. That takes the row lock,
+    which the sweep's ``FOR UPDATE SKIP LOCKED`` respects, so the sweep cannot delete these bytes between the
+    existence check inside ``put_file`` and the commit; if the sweep holds the lock first, this upsert waits for it
+    and ``put_file`` then finds the bytes gone and uploads them again. If the upload fails, the transaction rolls
+    back and the row is left as it was."""
     with db.transaction(worker=True) as cur:
         cur.execute(
             """INSERT INTO artifacts (sha256, media_type, bytes, filename) VALUES (%s, %s, %s, %s)
-               ON CONFLICT (sha256) DO NOTHING""",
-            (sha256, media_type, size, filename),
+               ON CONFLICT (sha256) DO UPDATE SET last_used_at = now(), expired_at = NULL""",
+            (sha256, media_type, path.stat().st_size, filename),
         )
+        store.put_file(path, sha256, media_type)
 
 
 def complete(job: dict, worker_id: str, output_sha256: str, variables_sha256: str, result: dict) -> bool:

@@ -5,7 +5,9 @@
 * ``S3ArtifactStore`` — any S3-compatible endpoint (Cloudflare R2, MinIO, AWS) with a PRIVATE bucket.
 
 Objects are keyed by the sha256 of their bytes and written once; ``put_file`` verifies the digest it is
-given. Nothing here produces a public URL: bytes reach clients only through the API's signed URLs.
+given. ``delete`` is used only by the retention sweep (``fabrication_prep.retention``) and is idempotent: deleting
+bytes that are already gone is not an error. Nothing here produces a public URL: bytes reach clients only through
+the API's signed URLs.
 """
 
 from __future__ import annotations
@@ -53,6 +55,7 @@ class ArtifactStore(Protocol):
     def exists(self, sha256: str) -> bool: ...
     def size(self, sha256: str) -> int: ...
     def open_stream(self, sha256: str) -> Iterator[bytes]: ...
+    def delete(self, sha256: str) -> None: ...
 
 
 class FsArtifactStore:
@@ -98,6 +101,9 @@ class FsArtifactStore:
                 yield from iter(lambda: fh.read(CHUNK), b"")
 
         return gen()
+
+    def delete(self, sha256: str) -> None:
+        self._path(sha256).unlink(missing_ok=True)
 
 
 class S3ArtifactStore:
@@ -176,6 +182,11 @@ class S3ArtifactStore:
                 raise ArtifactNotFound(sha256) from None
             raise
         return obj["Body"].iter_chunks(CHUNK)
+
+    def delete(self, sha256: str) -> None:
+        # S3 DeleteObject succeeds for a missing key, so a sweep that is retried after a partial run is safe. Any
+        # other error (for example a token without delete rights) propagates and fails the sweep visibly.
+        self.client.delete_object(Bucket=self.bucket, Key=self._key(sha256))
 
 
 def store_from_settings(s: Settings) -> ArtifactStore:

@@ -9,6 +9,7 @@ import psycopg
 import pytest
 
 from fabrication_prep import db, queue
+from fabrication_prep.artifacts import FsArtifactStore, file_sha256
 from fabrication_prep.canonical import canonical_sha256
 
 APP_URL = os.environ.get("FABRICATION_PREP_TEST_APP_URL", "")
@@ -70,16 +71,24 @@ def test_skip_locked_lets_a_second_claimer_pass_a_locked_row(clean_db):
         assert claimed["id"] == second["id"]
 
 
-def test_renew_complete_and_lost_lease(clean_db, admin_conn):
+def stored(tmp_path, content: bytes, media_type: str, filename: str) -> str:
+    path = tmp_path / filename
+    path.write_bytes(content)
+    sha = file_sha256(path)
+    queue.store_artifact(FsArtifactStore(tmp_path / "store"), path, sha, media_type, filename)
+    return sha
+
+
+def test_renew_complete_and_lost_lease(clean_db, admin_conn, tmp_path):
     enqueue()
     job = queue.claim("w1", 60)
     assert queue.renew_lease(job["id"], "w1", 60)
     assert not queue.renew_lease(job["id"], "intruder", 60)
-    queue.record_artifact("a" * 64, "text/x-gcode", 10, "plate_1.gcode")
-    queue.record_artifact("b" * 64, "application/json", 5, "slicer-variables.json")
-    assert not queue.complete(job, "intruder", "a" * 64, "b" * 64, {})
-    assert queue.complete(job, "w1", "a" * 64, "b" * 64, {"estimates": {"print_time_s": 1}})
-    assert not queue.complete(job, "w1", "a" * 64, "b" * 64, {})  # already finished
+    out = stored(tmp_path, b"G28\n", "text/x-gcode", "plate_1.gcode")
+    doc = stored(tmp_path, b"{}", "application/json", "slicer-variables.json")
+    assert not queue.complete(job, "intruder", out, doc, {})
+    assert queue.complete(job, "w1", out, doc, {"estimates": {"print_time_s": 1}})
+    assert not queue.complete(job, "w1", out, doc, {})  # already finished
     row = queue.get_job("service-account:a", job["id"])
     assert row["status"] == "succeeded" and row["lease_owner"] is None and row["finished_at"] is not None
     assert [t for t, _ in outbox(admin_conn)] == ["slice_job.succeeded"]
@@ -173,6 +182,8 @@ def test_rls_hides_other_owners_jobs_from_the_runtime_role(clean_db):
         "DELETE FROM artifacts",
         "ALTER TABLE slice_jobs NO FORCE ROW LEVEL SECURITY",
         "UPDATE artifacts SET bytes = 0",
+        "UPDATE artifacts SET media_type = 'text/plain'",
+        "UPDATE artifacts SET created_at = now()",
     ],
 )
 def test_runtime_role_lacks_dangerous_privileges(clean_db, statement):

@@ -6,7 +6,7 @@
 | ``GET /v1/slice-jobs/{id}`` | slice scope, owner | status, error, output + slicer-variables with fresh signed URLs |
 | ``GET /v1/profiles`` | slice scope | the profile catalog (ids, versions, digests, compatibility) |
 | ``GET /v1/profiles/{kind}/{id}/{version}`` | slice scope | one profile's OrcaSlicer JSON |
-| ``GET /v1/artifacts/{sha256}`` | signed URL | the bytes (no token: the URL is the capability) |
+| ``GET /v1/artifacts/{sha256}`` | signed URL | the bytes (no token: the URL is the capability); 410 once expired |
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from . import queue
 from .artifacts import ArtifactNotFound, store_from_settings
 from .auth import Principal, require_slice_principal
 from .canonical import canonical_sha256
-from .errors import ApiError, Problem, conflict, forbidden, not_found, unprocessable
+from .errors import ApiError, Problem, conflict, forbidden, gone, not_found, unprocessable
 from .inputs import check_url
 from .profiles import get_catalog
 from .settings import get_settings
@@ -122,15 +122,26 @@ def job_view(job: dict) -> dict[str, Any]:
     }
     if job["status"] == "succeeded":
         out = queue.get_artifact(job["output_sha256"])
-        view["output"] = _signed(
-            job["output_sha256"], {"media_type": out["media_type"], "bytes": out["bytes"], "filename": out["filename"]}
-        )
         doc = queue.get_artifact(job["slicer_variables_sha256"])
-        view["slicer_variables"] = _signed(
-            job["slicer_variables_sha256"], {"media_type": doc["media_type"], "bytes": doc["bytes"]}
-        )
+        expired = [a["expired_at"] for a in (out, doc) if a["expired_at"] is not None]
+        if expired:
+            # Retention deleted the bytes (fabrication_prep.retention): no URL is issued, so a consumer fails visibly
+            # instead of handing out a link that cannot be served. The digests stay in the job's result.
+            view["artifacts_expired_at"] = _iso(min(expired))
+        else:
+            view["output"] = _signed(
+                job["output_sha256"],
+                {"media_type": out["media_type"], "bytes": out["bytes"], "filename": out["filename"]},
+            )
+            view["slicer_variables"] = _signed(
+                job["slicer_variables_sha256"], {"media_type": doc["media_type"], "bytes": doc["bytes"]}
+            )
         view["estimates"] = (job["result"] or {}).get("estimates")
     return view
+
+
+def _iso(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 @router.post("/slice-jobs", status_code=202)
@@ -221,6 +232,8 @@ async def download_artifact(
     meta = await run_in_threadpool(queue.get_artifact, sha256)
     if meta is None:
         raise not_found()
+    if meta["expired_at"] is not None:
+        raise gone("artifact_expired", "The artifact's bytes passed the retention period and were deleted")
     store = store_from_settings(s)
     try:
         stream = await run_in_threadpool(store.open_stream, sha256)

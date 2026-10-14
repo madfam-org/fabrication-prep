@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 OWNER_SETTING = "fabrication_prep.owner"
 WORKER_SETTING = "fabrication_prep.worker"
-EXPECTED_SCHEMA_REVISION = "0001_initial"
+EXPECTED_SCHEMA_REVISION = "0002_artifact_retention"
 _pool: ConnectionPool | None = None
 
 
