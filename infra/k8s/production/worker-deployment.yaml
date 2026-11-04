@@ -92,7 +92,7 @@ spec:
             - name: tmp
               mountPath: /tmp
           resources:
-            requests: { cpu: 500m, memory: 1Gi }
+            requests: { cpu: 45m, memory: 176Mi }
             limits: { cpu: "2", memory: 3Gi }
           # The worker has no HTTP port: probes read its heartbeat file (touched every poll and lease renewal).
           livenessProbe:
